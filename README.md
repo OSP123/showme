@@ -16,6 +16,7 @@ Creating a project:
 Sharing locations:
 - A pin can be placed, or users geolocation used.
 - User adds optional tags and a description of what is there.
+- It would probably be useful to allow adding photos too.
 
 Browsing the map:
 - Users see locations being added in real-time.
