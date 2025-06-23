@@ -1,0 +1,48 @@
+name: showme
+
+volumes:
+  db_data:
+
+networks:
+  showme-net:
+
+services:
+  db:
+    image: "docker.io/postgis/postgis:17-3.5-alpine"
+    volumes:
+      - db_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=showme
+      - POSTGRES_PASSWORD=showme
+      - POSTGRES_DB=showme
+    ports:
+      - "5438:5432"
+    networks:
+      - showme-net
+    restart: "unless-stopped"
+    # Low max_connections for better performance.
+    # See https://richyen.com/postgres/2021/09/03/less-is-more-max-connections.html
+    # and other sources online. Approx (cores * 4 * replicas)
+    # Plus electric-sql defaults to need 20 connections (64+20)
+    command: -c 'max_connections=84' -c 'wal_level=logical'
+    healthcheck:
+      test: pg_isready -U showme -d showme
+      start_period: 5s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  electric:
+    image: "electricsql/electric:1.0.20"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://showme:showme@db/showme?sslmode=disable
+      # For development we do not need to include auth token security
+      ELECTRIC_INSECURE: true
+    ports:
+      - 3011:3000
+    networks:
+      - showme-net
+    restart: "unless-stopped"
