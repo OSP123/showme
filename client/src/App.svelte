@@ -1,110 +1,158 @@
 <script lang="ts">
-	import '$styles/map.css';
+  import { onMount } from 'svelte';
+  import type { Map as GLMap, Marker as GLMarker } from 'maplibre-gl';
+  import Map from '$lib/Map.svelte';
+  import 'maplibre-gl/dist/maplibre-gl.css';
 
-  import type { PGliteWithSync } from '@electric-sql/pglite-sync';
-  import type { ShapeStream, FetchError } from '@electric-sql/client';
-  import type { ShapeData } from '@electric-sql/client';
+  import { initLocalDb } from '$lib/db/pglite';
+  import { createMap, addPin, getPins } from '$lib/api';
+  import type { PinRow } from '$lib/models';
+  import type { ShapeStream } from '@electric-sql/pglite-sync';
 
-	import { onMount } from 'svelte';
-	import { PGlite } from '@electric-sql/pglite';
-	import {
-		MapLibre,
-		GeoJSON,
-		CircleLayer,
-	} from 'svelte-maplibre';
+  let db: any;
 
-  import { getDbOnce } from '$lib/db/pglite';
+  // UI state
+  let mapId     = '';
+  let mapName   = '';
+  let isPrivate = false;
+  let loading   = false;
 
-	let db: PGlite | undefined = $state(undefined);
-	let testSync: ShapeStream | undefined;
-  let { maplibreMap = $bindable() } = $props()
-	let loaded: boolean = $state(false);
+  // Map instance & markers
+  let mapInstance: GLMap;
+  let markers: GLMarker[] = [];
+  let center: [number, number] = [0, 0];
+  let zoom = 2;
 
+  // OSM raster style
   const osmStyle = {
     id: 'OSM Raster',
     version: 8,
-    name: 'OpenStreetMap',
     sources: {
       osm: {
         type: 'raster',
         tiles: [
           'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
           'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
         ],
         minzoom: 0,
         maxzoom: 19,
         attribution:
-          '© <a target="_blank" rel="noopener" href="https://openstreetmap.org/copyright">OpenStreetMap contributors</a>',
-      },
+          '© <a href="https://openstreetmap.org" target="_blank" rel="noopener">OSM contributors</a>'
+      }
     },
     layers: [
       {
         id: 'osm',
         type: 'raster',
         source: 'osm',
-        layout: {
-          visibility: 'visible',
-        },
-      },
-    ],
+        layout: { visibility: 'visible' }
+      }
+    ]
   };
 
-	onMount(async () => {
-    db = await getDbOnce();
+  // track active ShapeStream per mapId
+  const pinStreams = new Map<string, ShapeStream>();
 
-    // Test the database works
-    const response = await db?.query('SELECT * FROM pg_catalog.pg_tables;');
-    console.log(response);
-	});
+  onMount(async () => {
+    db = await initLocalDb();
+  });
 
-	async function getTestTableSync(db: PGliteWithSync, mapId: number): Promise<ShapeStream | undefined> {
-		if (!db || !mapId) {
-			return;
-		}
+  async function onCreateMap() {
+    if (!db || !mapName) return;
+    loading = true;
+    const { id } = await createMap(db, mapName, isPrivate);
+    mapId = id;
+    loading = false;
+  }
 
-		testSync = await db.electric.syncShapeToTable({
-			shape: {
-				url: `${import.meta.env.VITE_SYNC_URL}/v1/shape`,
-				params: {
-					table: 'test',
-					where: `map_id=${mapId}`,
-				},
-			},
-			table: 'test',
-			primaryKey: ['map_id'],
-			shapeKey: 'test',
-			initialInsertMethod: 'csv', // performance boost on initial sync
-		});
+  async function drawPins() {
+    if (!db || !mapId || !mapInstance) return;
+    markers.forEach((m) => m.remove());
+    markers = [];
+    const list = await getPins(db, mapId);
+    for (const pin of list) {
+      const m = new GLMarker({ color: 'red' })
+        .setLngLat([pin.lng, pin.lat])
+        .addTo(mapInstance);
+      markers.push(m);
+    }
+  }
+
+  async function handleMapLoad(e: CustomEvent<{ map: GLMap }>) {
+    mapInstance = e.detail.map;
+
+    mapInstance.on('click', async ({ lngLat }) => {
+      if (!mapId) return;
+      await addPin(db, {
+        map_id: mapId,
+        lat:    lngLat.lat,
+        lng:    lngLat.lng
+      });
+    });
+
+    await drawPins();
+
+    if (!pinStreams.has(mapId)) {
+      const stream = await db.electric.syncShapeToTable({
+        shape: {
+          url: import.meta.env.VITE_ELECTRIC_SHAPE_URL,
+          params: {
+            table:     'pins',
+            where:     `map_id=${mapId}`,
+            source_id: import.meta.env.VITE_ELECTRIC_SOURCE_ID,
+            secret:    import.meta.env.VITE_ELECTRIC_SECRET
+          }
+        },
+        table:      'pins',
+        primaryKey: ['id'],
+        shapeKey:   `pins_${mapId}`,
+        initialInsertMethod: 'json'
+      });
+      pinStreams.set(mapId, stream);
+
+      stream.subscribe(async () => {
+        await drawPins();
+      });
+    }
   }
 </script>
 
-<main class="flex flex-col h-screen overflow-hidden font-barlow">
-  <MapLibre
-    style={osmStyle}
-    class="map"
-    center={[0, 0]}
-    zoom={2}
-    standardControls
-    attributionControl={false}
-  >
-    <GeoJSON
-      id="pois"
-      data={{
-        "type": "Point",
-        "coordinates": [1.501641, 55.454522]
-      }}
-    >
-      <CircleLayer
-        id="poi-circles"
-        hoverCursor="pointer"
-        paint={{
-            'circle-color': 'red',
-            'circle-radius': 8,
-            'circle-stroke-width': 2,
-            'circle-stroke-color': 'white',
-          }}
+<style>
+  main       { width: 100vw; height: 100vh; }
+  .controls  { padding: 1rem; background: #f9f9f9; }
+  .controls input { margin-right: .5rem; }
+</style>
+
+<main>
+  {#if !mapId}
+    <div class="controls">
+      <h2>Create a Map</h2>
+      <input
+        type="text"
+        placeholder="Map name"
+        bind:value={mapName}
+        disabled={loading}
       />
-    </GeoJSON>
-  </MapLibre>
+      <label>
+        <input
+          type="checkbox"
+          bind:checked={isPrivate}
+          disabled={loading}
+        />
+        Private
+      </label>
+      <button on:click={onCreateMap} disabled={!mapName || loading}>
+        {#if loading}Creating…{:else}Create Map{/if}
+      </button>
+    </div>
+  {:else}
+    <Map
+      style={osmStyle}
+      {center}
+      {zoom}
+      on:load={handleMapLoad}
+      className="map"
+    />
+  {/if}
 </main>

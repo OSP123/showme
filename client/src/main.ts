@@ -1,8 +1,11 @@
-import { mount } from 'svelte'
-import App from './App.svelte'
+// client/src/main.ts
+import App from './App.svelte';
 
-const app = mount(App, {
-  target: document.getElementById('app')!,
-})
+const app = new App({
+  target: document.getElementById('app')!,  // or document.body
+  props: {
+    // any props you want to pass
+  }
+});
 
-export default app
+export default app;
