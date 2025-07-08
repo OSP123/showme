@@ -4,9 +4,9 @@ import { electricSync } from '@electric-sql/pglite-sync';
 
 declare global {
   interface ImportMetaEnv {
-    readonly VITE_ELECTRIC_SHAPE_URL: string;
-    readonly VITE_ELECTRIC_SOURCE_ID: string;
-    readonly VITE_ELECTRIC_SECRET: string;
+    readonly VITE_ELECTRIC_SHAPE_URL:  string;
+    readonly VITE_ELECTRIC_SOURCE_ID:  string;
+    readonly VITE_ELECTRIC_SECRET:     string;
   }
 }
 
@@ -28,10 +28,17 @@ export function initLocalDb(): Promise<PGlite> {
 
     const pdb = await PGlite.create({
       dataDir: 'idb://showmedb',
+      locateFile: (file: string) => {
+        const name = file.split('/').pop()!.split('?')[0];
+        // both bundles now live at /pglite/<filename>
+        if (name === 'pglite.wasm') return `/pglite/${name}`;
+        if (name === 'pglite.data') return `/pglite/${name}`;
+        return file;
+      },
       extensions: { electric: electricSync() },
     });
 
-    // normalize your schema
+    // your table creation…
     await pdb.exec(`
       CREATE TABLE IF NOT EXISTS maps (
         id           TEXT PRIMARY KEY,
@@ -55,36 +62,22 @@ export function initLocalDb(): Promise<PGlite> {
       );
     `);
 
-    // *** note the shapeKey here ***
+    // syncShapes…
     await Promise.all([
       pdb.electric.syncShapeToTable({
-        shape: {
-          url: SHAPE_URL,
-          params: {
-            table:     'maps',
-            source_id: SOURCE_ID,
-            secret:    SOURCE_SECRET
-          }
-        },
+        shape: { url: SHAPE_URL, params: { table: 'maps', source_id: SOURCE_ID, secret: SOURCE_SECRET } },
         table:      'maps',
         primaryKey: ['id'],
-        shapeKey:   'maps',            // <— add this
+        shapeKey:   'maps',
         initialInsertMethod: 'json'
       }),
       pdb.electric.syncShapeToTable({
-        shape: {
-          url: SHAPE_URL,
-          params: {
-            table:     'pins',
-            source_id: SOURCE_ID,
-            secret:    SOURCE_SECRET
-          }
-        },
+        shape: { url: SHAPE_URL, params: { table: 'pins', source_id: SOURCE_ID, secret: SOURCE_SECRET } },
         table:      'pins',
         primaryKey: ['id'],
-        shapeKey:   'pins',            // <— and this
+        shapeKey:   'pins',
         initialInsertMethod: 'json'
-      })
+      }),
     ]);
 
     db = pdb;

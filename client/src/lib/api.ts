@@ -1,3 +1,4 @@
+// src/lib/api.ts
 import type { PGliteWithSync } from '@electric-sql/pglite-sync';
 import type { PinRow }        from './models';
 import { initLocalDb }        from './db/pglite';
