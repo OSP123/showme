@@ -28,13 +28,6 @@ export function initLocalDb(): Promise<PGlite> {
 
     const pdb = await PGlite.create({
       dataDir: 'idb://showmedb',
-      locateFile: (file: string) => {
-        const name = file.split('/').pop()!.split('?')[0];
-        // both bundles now live at /pglite/<filename>
-        if (name === 'pglite.wasm') return `/pglite/${name}`;
-        if (name === 'pglite.data') return `/pglite/${name}`;
-        return file;
-      },
       extensions: { electric: electricSync() },
     });
 
@@ -52,11 +45,11 @@ export function initLocalDb(): Promise<PGlite> {
       CREATE TABLE IF NOT EXISTS pins (
         id           TEXT PRIMARY KEY,
         map_id       TEXT NOT NULL,
-        lat          REAL NOT NULL,
-        lng          REAL NOT NULL,
-        tags         TEXT,
+        lat          DOUBLE PRECISION NOT NULL,
+        lng          DOUBLE PRECISION NOT NULL,
+        tags         TEXT NOT NULL DEFAULT '{}',
         description  TEXT,
-        photo_urls   TEXT,
+        photo_urls   TEXT NOT NULL DEFAULT '{}',
         created_at   TEXT NOT NULL,
         updated_at   TEXT NOT NULL
       );

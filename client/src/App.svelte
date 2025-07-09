@@ -39,9 +39,13 @@
   });
 
   async function handleCreate(event: CustomEvent<{ name: string; isPrivate: boolean }>) {
-    const { name, isPrivate } = event.detail;
-    const { id } = await createMap(db, name, isPrivate);
-    mapId = id;
+    try {
+      const { name, isPrivate } = event.detail;
+      const { id } = await createMap(db, name, isPrivate);
+      mapId = id;
+    } catch (error) {
+      console.error('Failed to create map:', error);
+    }
   }
 
   function handleMapLoad(event: CustomEvent<{ map: GLMap }>) {

@@ -10,16 +10,19 @@
 
   let markers: Marker[] = [];
   let unsubscribe: () => void;
+  let syncInitialized = false;
 
   async function drawPins() {
     const db = await initLocalDb();
-    const res = await db.query<{ rows: PinRow[] }>(
+    const res = await db.query(
       `SELECT * FROM pins WHERE map_id=$1 ORDER BY created_at`, [mapId]
     );
-    // remove old
+    
+    // remove old markers
     markers.forEach(m => m.remove());
     markers = [];
-    // add new
+    
+    // add new markers
     markers = res.rows.map(pin =>
       new Marker({ color: 'red' })
         .setLngLat([pin.lng, pin.lat])
@@ -27,10 +30,13 @@
     );
   }
 
-  $: if (map && mapId) {
-    drawPins(); // initial draw
-
-    (async () => {
+  async function setupSync() {
+    if (syncInitialized) return;
+    syncInitialized = true;
+    
+    try {
+      await drawPins(); // initial draw
+      
       const db = await initLocalDb();
       const stream = await db.electric.syncShapeToTable({
         shape: {
@@ -47,8 +53,17 @@
         shapeKey:   `pins_${mapId}`,
         initialInsertMethod: 'json'
       });
+      
       unsubscribe = stream.subscribe(drawPins);
-    })();
+    } catch (error) {
+      console.error('Failed to setup sync:', error);
+      syncInitialized = false; // Reset so we can try again
+    }
+  }
+
+  // Reactive statement - only runs when map or mapId changes
+  $: if (map && mapId && !syncInitialized) {
+    setupSync();
   }
 
   onDestroy(() => {

@@ -21,6 +21,24 @@ export default defineConfig({
       '$styles': path.resolve(__dirname, './src/styles')
     }
   },
-  define: { 'process.env': JSON.stringify(process.env) },
-  server: { port: 5173 }
+  define: { 
+    'process.env': JSON.stringify(process.env),
+    global: 'globalThis'
+  },
+  server: { 
+    port: 5173,
+    fs: {
+      allow: ['..'] // Allow access to parent directory
+    }
+  },
+  optimizeDeps: {
+    exclude: ['@electric-sql/pglite', '@electric-sql/pglite-sync'],
+    include: ['maplibre-gl']
+  },
+  build: {
+    target: 'esnext'
+  },
+  worker: {
+    format: 'es'
+  }
 });

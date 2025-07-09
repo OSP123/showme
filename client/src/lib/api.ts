@@ -31,7 +31,7 @@ export async function getPins(
   db: PGliteWithSync,
   mapId: string
 ): Promise<PinRow[]> {
-  const res = await db.query<{ rows: PinRow[] }>(
+  const res = await db.query(
     `SELECT * FROM pins WHERE map_id = $1 ORDER BY created_at`,
     [mapId]
   );
@@ -55,9 +55,9 @@ export async function addPin(
       data.map_id,
       data.lat,
       data.lng,
-      JSON.stringify([]),
+      '{}',
       null,
-      JSON.stringify([]),
+      '{}',
       now,
       now
     ]
