@@ -11,10 +11,33 @@
   let container: HTMLDivElement;
 
   onMount(() => {
-    const map = new maplibregl.Map({ container, style, center, zoom });
-    map.on('load', () => dispatch('load', { map }));
+    console.log('MapView mounting, container:', container);
+    const map = new maplibregl.Map({ 
+      container, 
+      style, 
+      center, 
+      zoom 
+    });
+    
+    map.on('load', () => {
+      console.log('MapLibre map loaded successfully');
+      dispatch('load', { map });
+    });
+    
+    map.on('error', (e) => {
+      console.error('MapLibre error:', e);
+    });
+    
     return () => map.remove();
   });
 </script>
 
-<div bind:this={container} class="w-full h-full" />
+<style>
+  .map-container {
+    width: 100%;
+    height: 100%;
+    min-height: 400px; /* Fallback minimum height */
+  }
+</style>
+
+<div bind:this={container} class="map-container" />
