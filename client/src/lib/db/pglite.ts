@@ -57,7 +57,11 @@ export function initLocalDb(): Promise<PGlite> {
 
     // Only sync maps globally - pins will be synced per-map in PinLayer
     await pdb.electric.syncShapeToTable({
-      shape: { url: SHAPE_URL, params: { table: 'maps', source_id: SOURCE_ID, secret: SOURCE_SECRET } },
+      shape: { url: SHAPE_URL, params: { 
+        table: 'maps', 
+        // source_id: SOURCE_ID, 
+        // secret: SOURCE_SECRET,
+      } },
       table:      'maps',
       primaryKey: ['id'],
       shapeKey:   'maps',

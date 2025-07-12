@@ -2,6 +2,12 @@
 
 Collaboratively pin locations on a map.
 
+## Get Started
+
+```bash
+docker compose up -d
+```
+
 ## Simple By Design
 
 Creating a project:

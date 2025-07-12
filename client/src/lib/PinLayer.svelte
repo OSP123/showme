@@ -42,8 +42,8 @@
           params: {
             table:     'pins',
             where:     `map_id='${mapId}'`,  // Fixed: quote the value
-            source_id: import.meta.env.VITE_ELECTRIC_SOURCE_ID,
-            secret:    import.meta.env.VITE_ELECTRIC_SECRET
+            // source_id: import.meta.env.VITE_ELECTRIC_SOURCE_ID,
+            // secret:    import.meta.env.VITE_ELECTRIC_SECRET
           }
         },
         table:      'pins',

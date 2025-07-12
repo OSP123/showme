@@ -4,21 +4,22 @@ volumes:
   db_data:
 
 networks:
-  showme-net:
+  net:
 
 services:
   db:
     image: "docker.io/postgis/postgis:17-3.5-alpine"
     volumes:
       - db_data:/var/lib/postgresql/data/
+      - ./migrations/20_create_tables.sql:/docker-entrypoint-initdb.d/20_create_tables.sql
     environment:
       - POSTGRES_USER=showme
       - POSTGRES_PASSWORD=showme
       - POSTGRES_DB=showme
-    ports:
-      - "5438:5432"
+    # ports:
+    #   - "5438:5432"
     networks:
-      - showme-net
+      - net
     restart: "unless-stopped"
     # Low max_connections for better performance.
     # See https://richyen.com/postgres/2021/09/03/less-is-more-max-connections.html
@@ -39,10 +40,43 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://showme:showme@db/showme?sslmode=disable
-      # For development we do not need to include auth token security
+      # ELECTRIC_SECRET: xxx
       ELECTRIC_INSECURE: true
-    ports:
-      - 3011:3000
     networks:
-      - showme-net
+      - net
+    restart: "unless-stopped"
+
+  # Required by electric to expose necessary headers
+  nginx:
+    image: nginx:1.29-alpine
+    depends_on:
+      - electric
+    ports:
+      - 3013:80
+    networks:
+      - net
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+
+  showme:
+    build: .
+    image: codeberg.org/humanitarian-tech/showme:latest
+    depends_on:
+      - nginx
+    volumes:
+      - ./client/public:/app/public
+      - ./client/src:/app/src
+      - ./client/index.html:/app/index.html
+      - ./client/svelte.config.js:/app/svelte.config.js
+      - ./client/uno.config.ts:/app/uno.config.ts
+      - ./client/vite.config.ts:/app/vite.config.ts
+    environment:
+      VITE_ELECTRIC_SHAPE_URL: http://localhost:3013
+      VITE_ELECTRIC_SECRET: xxx
+      VITE_ELECTRIC_SOURCE_ID: 111
+    ports:
+      - 3012:5173
+    networks:
+      - net
     restart: "unless-stopped"
