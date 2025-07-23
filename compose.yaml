@@ -1,24 +1,23 @@
 name: showme
-
 volumes:
   db_data:
-
 networks:
-  showme-net:
-
+  net:
 services:
   db:
-    image: "docker.io/postgis/postgis:17-3.5-alpine"
+    image: "docker.io/postgis/postgis:17-3.5"  # Removed -alpine for ARM64 compatibility
+    platform: linux/amd64  # Force x86_64 platform
     volumes:
       - db_data:/var/lib/postgresql/data/
+      - ./migrations/20_create_tables.sql:/docker-entrypoint-initdb.d/20_create_tables.sql
     environment:
       - POSTGRES_USER=showme
       - POSTGRES_PASSWORD=showme
       - POSTGRES_DB=showme
-    ports:
-      - "5438:5432"
+    # ports:
+    #   - "5438:5432"
     networks:
-      - showme-net
+      - net
     restart: "unless-stopped"
     # Low max_connections for better performance.
     # See https://richyen.com/postgres/2021/09/03/less-is-more-max-connections.html
@@ -31,18 +30,65 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-
   electric:
     image: "electricsql/electric:1.0.20"
+    platform: linux/amd64  # Force x86_64 platform
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://showme:showme@db/showme?sslmode=disable
-      # For development we do not need to include auth token security
+      # ELECTRIC_SECRET: dev-secret-key-123  # Commented out since we're using INSECURE mode
       ELECTRIC_INSECURE: true
-    ports:
-      - 3011:3000
     networks:
-      - showme-net
+      - net
+    restart: "unless-stopped"
+  # PostgREST: HTTP API for PostgreSQL (for serverless pin writes)
+  postgres-bridge:
+    image: postgrest/postgrest:v12.2.0
+    platform: linux/amd64  # Force x86_64 platform
+    environment:
+      PGRST_DB_URI: postgresql://showme:showme@db:5432/showme
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: showme
+      PGRST_OPENAPI_SERVER_PROXY_URI: http://localhost:3015
+    ports:
+      - "3015:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - net
+    restart: "unless-stopped"
+  # Required by electric to expose necessary headers
+  nginx:
+    image: nginx:1.29-alpine
+    depends_on:
+      - electric
+    ports:
+      - 3013:80
+    networks:
+      - net
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+  showme:
+    build: .
+    image: codeberg.org/humanitarian-tech/showme:latest
+    depends_on:
+      - nginx
+    volumes:
+      - ./client/public:/app/public
+      - ./client/src:/app/src
+      - ./client/index.html:/app/index.html
+      - ./client/svelte.config.js:/app/svelte.config.js
+      - ./client/uno.config.ts:/app/uno.config.ts
+      - ./client/vite.config.ts:/app/vite.config.ts
+    environment:
+      VITE_ELECTRIC_SHAPE_URL: http://localhost:3013/v1/shape  # Fixed URL
+      VITE_ELECTRIC_SOURCE_ID: dev-source-001
+    ports:
+      - 3012:5173
+    networks:
+      - net
     restart: "unless-stopped"

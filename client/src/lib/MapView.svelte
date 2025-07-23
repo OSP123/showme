@@ -21,6 +21,7 @@
     
     map.on('load', () => {
       console.log('MapLibre map loaded successfully');
+      window.map = map;
       dispatch('load', { map });
     });
     
@@ -30,6 +31,8 @@
     
     return () => map.remove();
   });
+
+
 </script>
 
 <style>

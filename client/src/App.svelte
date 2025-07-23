@@ -39,6 +39,13 @@
 
   onMount(async () => {
     db = await initLocalDb();
+    
+    // Check if there's a mapId in the URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlMapId = urlParams.get('map');
+    if (urlMapId) {
+      mapId = urlMapId;
+    }
   });
 
   async function handleCreate(event: CustomEvent<{ name: string; isPrivate: boolean }>) {
@@ -48,6 +55,11 @@
       const result = await createMap(db, name, isPrivate);
       console.log('Map created:', result);
       mapId = result.id;
+      
+      // Update URL to include the map ID
+      const url = new URL(window.location.href);
+      url.searchParams.set('map', result.id);
+      window.history.pushState({}, '', url);
     } catch (error) {
       console.error('Failed to create map:', error);
     }
@@ -70,6 +82,12 @@
       }
     });
   }
+
+  console.log('Environment check:', {
+    SHAPE_URL: import.meta.env.VITE_ELECTRIC_SHAPE_URL,
+    SOURCE_ID: import.meta.env.VITE_ELECTRIC_SOURCE_ID,
+    ALL_ENV: import.meta.env
+  });
 </script>
 
 <style>

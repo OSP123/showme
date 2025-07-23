@@ -25,7 +25,8 @@ export default defineConfig({
     'process.env': JSON.stringify(process.env),
     global: 'globalThis'
   },
-  server: { 
+  server: {
+    host: '0.0.0.0',
     port: 5173,
     fs: {
       allow: ['..'] // Allow access to parent directory
