@@ -24,5 +24,17 @@
     "fs-extra": "^11.3.0",
     "typescript": "^4.9.5",
     "vite": "^4.3.9"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "22",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "pnpm",
+      "version": "10.13.1",
+      "onFail": "error"
+    }
   }
 }

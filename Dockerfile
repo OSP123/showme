@@ -7,8 +7,7 @@ RUN set -ex \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY client/package.json client/pnpm-lock.yaml ./
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+# Eventually we can use devEngines.packageManager, but for now we hardcode pnpm version...
+RUN npm install --global pnpm@10.13.1
 RUN pnpm install
 CMD ["pnpm", "run", "dev"]

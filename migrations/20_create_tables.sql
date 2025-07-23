@@ -32,29 +32,3 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   filters      JSONB,               -- e.g. { tags: ['water','shelter'] }
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
--- Enable ElectricSQL for these tables
--- This sets up the publication and replication identity
-
--- Enable row-level security (required for ElectricSQL)
-ALTER TABLE maps ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pins ENABLE ROW LEVEL SECURITY;
-ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
-
--- Set replica identity to FULL (required for ElectricSQL)
-ALTER TABLE maps REPLICA IDENTITY FULL;
-ALTER TABLE pins REPLICA IDENTITY FULL;
-ALTER TABLE subscriptions REPLICA IDENTITY FULL;
-
--- Create the ElectricSQL publication with the expected name
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'electric_publication_default') THEN
-        CREATE PUBLICATION electric_publication_default FOR ALL TABLES;
-    END IF;
-END $$;
-
--- Add tables to the publication explicitly
-ALTER PUBLICATION electric_publication_default ADD TABLE maps;
-ALTER PUBLICATION electric_publication_default ADD TABLE pins;
-ALTER PUBLICATION electric_publication_default ADD TABLE subscriptions;
