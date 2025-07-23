@@ -12,6 +12,7 @@
   let unsubscribe: () => void;
   let currentMapId = '';
   let syncPromise: Promise<void> | null = null;
+  let lastPinCount = -1;
 
   async function drawPins() {
     const db = await initLocalDb();
@@ -19,51 +20,70 @@
       `SELECT * FROM pins WHERE map_id=$1 ORDER BY created_at`, [mapId]
     );
     
-    // remove old markers
+    console.log(`🔍 Drawing pins for map ${mapId}:`, res.rows.length, 'pins found');
+    
+    // Only update if the pin count changed
+    if (res.rows.length === lastPinCount) {
+      console.log('📌 Pin count unchanged, skipping redraw');
+      return;
+    }
+    
+    console.log('Pin data:', res.rows);
+    
+    // Remove old markers
     markers.forEach(m => m.remove());
     markers = [];
     
-    // add new markers
-    markers = res.rows.map(pin =>
-      new Marker({ color: 'red' })
-        .setLngLat([pin.lng, pin.lat])
-        .addTo(map)
-    );
+    // Add new markers with coordinate conversion
+    markers = res.rows.map((pin, index) => {
+      // Convert string coordinates to numbers (fix for ElectricSQL sync)
+      const lat = typeof pin.lat === 'string' ? parseFloat(pin.lat) : pin.lat;
+      const lng = typeof pin.lng === 'string' ? parseFloat(pin.lng) : pin.lng;
+      
+      console.log(`📍 Creating marker ${index + 1} at [${lng}, ${lat}]`);
+      
+      const marker = new Marker({ color: 'red' })
+        .setLngLat([lng, lat])
+        .addTo(map);
+      
+      return marker;
+    });
+    
+    lastPinCount = res.rows.length;
+    console.log(`✅ Total markers on map: ${markers.length}`);
   }
 
   async function setupSync() {
     try {
       await drawPins(); // initial draw
       
-      const db = await initLocalDb();
-      const subscription = await db.electric.syncShapeToTable({
-        shape: {
-          url: import.meta.env.VITE_ELECTRIC_SHAPE_URL,
-          params: {
-            table:     'pins',
-            where:     `map_id='${mapId}'`,  // Fixed: quote the value
-            // source_id: import.meta.env.VITE_ELECTRIC_SOURCE_ID,
-            // secret:    import.meta.env.VITE_ELECTRIC_SECRET
-          }
-        },
-        table:      'pins',
-        primaryKey: ['id'],
-        shapeKey:   `pins_${mapId}`,
-        initialInsertMethod: 'json'
-      });
+      console.log('🔄 Pin polling started for map:', mapId);
       
-      // Set up a simple polling mechanism to redraw pins when data changes
-      // Since ElectricSQL handles the sync, we just need to periodically check for updates
-      const pollInterval = setInterval(drawPins, 1000); // Check every second
+      // Simple polling - no ElectricSQL sync setup here since it's done globally
+      const pollInterval = setInterval(async () => {
+        try {
+          const currentDb = await initLocalDb();
+          const currentRes = await currentDb.query(
+            `SELECT COUNT(*) as count FROM pins WHERE map_id=$1`, [mapId]
+          );
+          const currentCount = parseInt(currentRes.rows[0].count);
+          
+          if (currentCount !== lastPinCount) {
+            console.log(`📊 Pin count changed: ${lastPinCount} → ${currentCount}`);
+            await drawPins();
+          }
+        } catch (error) {
+          console.error('❌ Error polling for pin updates:', error);
+        }
+      }, 1000);
       
       unsubscribe = () => {
+        console.log('🧹 Cleaning up sync for map:', mapId);
         clearInterval(pollInterval);
-        // Note: ElectricSQL doesn't provide an easy way to unsubscribe from individual shapes
-        // The sync will continue, but we stop polling for updates
       };
       
     } catch (error) {
-      console.error('Failed to setup sync:', error);
+      console.error('❌ Failed to setup sync:', error);
     }
   }
 
@@ -76,10 +96,15 @@
     }
     
     currentMapId = mapId;
+    lastPinCount = -1; // Reset pin count
+    console.log('🗺️ Setting up PinLayer for new map:', mapId);
     syncPromise = setupSync();
   }
 
   onDestroy(() => {
     unsubscribe?.();
+    // Clean up markers
+    markers.forEach(m => m.remove());
+    markers = [];
   });
 </script>
