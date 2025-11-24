@@ -21,3 +21,24 @@ export interface PinRow {
   created_at: string;
   updated_at: string;
 }
+
+/** Pin type/category for quick categorization */
+export type PinType = 
+  | 'medical'
+  | 'water'
+  | 'checkpoint'
+  | 'shelter'
+  | 'food'
+  | 'danger'
+  | 'other';
+
+/** Pin creation data */
+export interface PinData {
+  map_id: string;
+  lat: number;
+  lng: number;
+  type?: PinType;
+  tags?: string[];
+  description?: string;
+  photo_urls?: string[];
+}

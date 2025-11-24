@@ -36,6 +36,24 @@ export function initLocalDb(): Promise<PGlite> {
       dataDir: 'idb://showmedb',
       extensions: { electric: electricSync() },
     });
+    
+    // Add error handler to catch duplicate key errors during ElectricSQL sync
+    // These can occur when ElectricSQL tries to sync data that already exists locally
+    const originalQuery = pdb.query.bind(pdb);
+    pdb.query = async function(sql: string, params?: any[]) {
+      try {
+        return await originalQuery(sql, params);
+      } catch (error: any) {
+        const errorMsg = error?.message || String(error);
+        // Ignore duplicate key errors - these are expected during sync
+        if (errorMsg.includes('duplicate key') || errorMsg.includes('UNIQUE constraint')) {
+          console.debug('⚠️ Ignoring duplicate key error during sync (expected)');
+          // Return empty result to continue execution
+          return { rows: [], rowCount: 0 };
+        }
+        throw error;
+      }
+    };
 
     // Create tables
     await pdb.exec(`
@@ -85,34 +103,33 @@ export function initLocalDb(): Promise<PGlite> {
       initialInsertMethod: 'json'
     });
 
-    // Setup sync for ALL pins (no filtering)
-    console.log('🔄 Setting up pins sync for ALL pins...');
-    
-    await pdb.electric.syncShapeToTable({
-      shape: { 
-        url: SHAPE_URL, 
-        params: {
-          table: 'pins',
-          source_id: SOURCE_ID
-        }
-      },
-      table: 'pins',
-      primaryKey: ['id'],
-      shapeKey: 'all_pins',
-      initialInsertMethod: 'json'
-    });
+    // Only sync maps globally - pins will be synced per-map in PinLayer
+    // This avoids trying to sync all pins at once and potential schema issues
+    console.log('✅ Maps sync configured - pins will sync per-map in PinLayer component');
 
-    // Add database change listeners for debugging
+    // Add database change listeners for reactive updates
     console.log('📡 Setting up database change listeners...');
     
     // Listen for changes to maps table
     pdb.listen('maps', (data) => {
       console.log('📡 Maps table change detected:', data);
+      // Dispatch custom event for components to react to
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('db-change', { 
+          detail: { table: 'maps', data } 
+        }));
+      }
     });
     
     // Listen for changes to pins table  
-    pdb.listen('pins', (data) => {
+    pdb.listen('pins', (data: any) => {
       console.log('📡 Pins table change detected:', data);
+      // Dispatch custom event for components to react to
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('db-change', { 
+          detail: { table: 'pins', data } 
+        }));
+      }
     });
 
     // Log initial table contents

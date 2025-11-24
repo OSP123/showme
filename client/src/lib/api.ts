@@ -16,7 +16,9 @@ async function saveToPostgres(table: string, data: any) {
     });
     
     if (!response.ok) {
-      throw new Error(`PostgreSQL save failed: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`PostgreSQL save failed (${response.status}):`, errorText);
+      throw new Error(`PostgreSQL save failed: ${response.statusText} - ${errorText}`);
     }
     
     return true;
@@ -92,36 +94,26 @@ export async function getPins(
   return res.rows;
 }
 
+import type { PinData } from './models';
+
 export async function addPin(
   db: PGliteWithSync,
-  data: { map_id: string; lat: number; lng: number }
+  data: PinData
 ): Promise<{ id: string }> {
   const id  = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  // NEW: Try to save to PostgreSQL first for ElectricSQL sync
-  try {
-    console.log('🔄 Saving pin to PostgreSQL for real-time sync...');
-    const success = await saveToPostgres('pins', {
-      id,
-      map_id: data.map_id,
-      lat: data.lat,
-      lng: data.lng,
-      tags: '{}',
-      description: null,
-      photo_urls: '{}',
-      created_at: now,
-      updated_at: now
-    });
-    
-    if (success) {
-      console.log('✅ Pin saved to PostgreSQL - will sync via ElectricSQL');
-    }
-  } catch (error) {
-    console.error('❌ Failed to save pin to PostgreSQL:', error);
+  // Process tags - include type if provided
+  const tagsArray = data.tags || [];
+  if (data.type && !tagsArray.includes(data.type)) {
+    tagsArray.unshift(data.type);
   }
+  const tagsJson = JSON.stringify(tagsArray);
 
-  // EXISTING: Save to local database (preserved exactly)
+  // Process photo URLs
+  const photoUrlsJson = JSON.stringify(data.photo_urls || []);
+
+  // Save to local database first (offline-first)
   await db.query(
     `INSERT INTO pins
       (id,map_id,lat,lng,tags,description,photo_urls,created_at,updated_at)
@@ -132,45 +124,39 @@ export async function addPin(
       data.map_id,
       data.lat,
       data.lng,
-      '{}',
-      null,
-      '{}',
+      tagsJson,
+      data.description || null,
+      photoUrlsJson,
       now,
       now
     ]
   );
 
-  // EXISTING: Manually trigger sync for pins (preserved exactly)
+  // Write to PostgREST so pin appears on server for other clients
+  // PostgREST expects TEXT[] arrays as JSON arrays (not strings)
   try {
-    console.log('🔄 Triggering manual sync for pins after adding pin');
+    const postgresData: any = {
+      id,
+      map_id: data.map_id,
+      lat: data.lat,
+      lng: data.lng,
+      description: data.description || null,
+      created_at: now,
+      updated_at: now
+    };
     
-    // Force a database notification since automatic detection is broken
-    setTimeout(async () => {
-      try {
-        console.log('⚡ Forcing pins sync check...');
-        
-        // Get fresh database instance
-        const freshDb = await initLocalDb();
-        
-        // Try to manually trigger sync by re-querying
-        const result = await freshDb.query('SELECT COUNT(*) FROM pins');
-        console.log('📊 Current pin count in DB:', result.rows[0].count);
-        
-        // Attempt to force sync if method exists
-        if (freshDb.electric && typeof freshDb.electric.sync === 'function') {
-          await freshDb.electric.sync();
-          console.log('✅ Manual sync triggered successfully');
-        } else {
-          console.log('⚠️ No manual sync method available');
-        }
-        
-      } catch (syncError) {
-        console.error('❌ Manual sync failed:', syncError);
-      }
-    }, 100);
+    // PostgREST expects TEXT[] columns as JSON arrays
+    postgresData.tags = tagsArray.length > 0 ? tagsArray : [];
+    postgresData.photo_urls = (data.photo_urls && data.photo_urls.length > 0) 
+      ? data.photo_urls 
+      : [];
     
+    const success = await saveToPostgres('pins', postgresData);
+    if (success) {
+      console.log('✅ Pin saved to PostgreSQL - will sync to other clients');
+    }
   } catch (error) {
-    console.error('❌ Failed to trigger pins sync:', error);
+    console.warn('⚠️ Failed to save pin to PostgreSQL (will sync when online):', error);
   }
 
   return { id };

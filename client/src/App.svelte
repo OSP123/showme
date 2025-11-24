@@ -3,13 +3,20 @@
   import CreateMap from '$lib/CreateMap.svelte';
   import MapView   from '$lib/MapView.svelte';
   import PinLayer  from '$lib/PinLayer.svelte';
+  import CreatePin from '$lib/CreatePin.svelte';
+  import ShareMap from '$lib/ShareMap.svelte';
+  import SyncStatus from '$lib/SyncStatus.svelte';
   import { initLocalDb }    from '$lib/db/pglite';
-  import { createMap, addPin } from '$lib/api';
+  import { createMap, addPin, getPins } from '$lib/api';
   import type { Map as GLMap }  from 'maplibre-gl';
+  import type { PinData, MapRow } from '$lib/models';
 
   let db: any;
   let mapId = '';
   let mapInstance: GLMap | null = null;
+  let mapData: MapRow | null = null;
+  let showCreatePin = false;
+  let pinLocation: { lat: number; lng: number } | null = null;
 
   // OpenStreetMap raster style
   const osmStyle = {
@@ -45,8 +52,26 @@
     const urlMapId = urlParams.get('map');
     if (urlMapId) {
       mapId = urlMapId;
+      await loadMapData();
     }
   });
+
+  async function loadMapData() {
+    if (!db || !mapId) return;
+    
+    try {
+      const result = await db.query(
+        `SELECT * FROM maps WHERE id = $1`,
+        [mapId]
+      );
+      
+      if (result.rows.length > 0) {
+        mapData = result.rows[0] as MapRow;
+      }
+    } catch (error) {
+      console.error('Failed to load map data:', error);
+    }
+  }
 
   async function handleCreate(event: CustomEvent<{ name: string; isPrivate: boolean }>) {
     console.log('Creating map with:', event.detail);
@@ -60,6 +85,8 @@
       const url = new URL(window.location.href);
       url.searchParams.set('map', result.id);
       window.history.pushState({}, '', url);
+      
+      await loadMapData();
     } catch (error) {
       console.error('Failed to create map:', error);
     }
@@ -68,19 +95,43 @@
   function handleMapLoad(event: CustomEvent<{ map: GLMap }>) {
     console.log('Map loaded:', event.detail);
     mapInstance = event.detail.map;
-    mapInstance.on('click', async ({ lngLat }) => {
+    mapInstance.on('click', ({ lngLat }) => {
       console.log('Map clicked at:', lngLat);
-      try {
-        await addPin(db, {
-          map_id: mapId,
-          lat: lngLat.lat,
-          lng: lngLat.lng
-        });
-        console.log('Pin added successfully');
-      } catch (error) {
-        console.error('Failed to add pin:', error);
-      }
+      pinLocation = { lat: lngLat.lat, lng: lngLat.lng };
+      showCreatePin = true;
     });
+  }
+
+  async function handlePinCreate(event: CustomEvent<PinData>) {
+    if (!pinLocation) return;
+    
+    try {
+      const pinData: PinData = {
+        ...event.detail,
+        map_id: mapId,
+        lat: pinLocation.lat,
+        lng: pinLocation.lng,
+      };
+      
+      await addPin(db, pinData);
+      console.log('Pin added successfully');
+      
+      // Close the pin creation modal
+      showCreatePin = false;
+      pinLocation = null;
+    } catch (error) {
+      console.error('Failed to add pin:', error);
+    }
+  }
+
+  function handlePinCancel() {
+    showCreatePin = false;
+    pinLocation = null;
+  }
+
+  // Reactive: load map data when mapId changes
+  $: if (mapId && db) {
+    loadMapData();
   }
 
   console.log('Environment check:', {
@@ -118,6 +169,13 @@
     height: 100%;
     background-color: white;
   }
+
+  .map-controls {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 100;
+  }
 </style>
 
 <main>
@@ -127,16 +185,39 @@
     </div>
   {:else}
     <div class="map-container">
+      <SyncStatus {db} />
+      
+      <div class="map-controls">
+        {#if mapData}
+          <ShareMap
+            mapId={mapId}
+            accessToken={mapData.access_token}
+            isPrivate={mapData.is_private === 'true'}
+          />
+        {/if}
+      </div>
+
       <MapView
         style={osmStyle}
         center={[0, 0]}
         zoom={2}
         on:load={handleMapLoad}
       />
+      
       {#if mapInstance}
         <PinLayer
           map={mapInstance}
           mapId={mapId}
+        />
+      {/if}
+
+      {#if showCreatePin && pinLocation}
+        <CreatePin
+          lat={pinLocation.lat}
+          lng={pinLocation.lng}
+          open={showCreatePin}
+          on:create={handlePinCreate}
+          on:cancel={handlePinCancel}
         />
       {/if}
     </div>

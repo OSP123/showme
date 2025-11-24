@@ -2,11 +2,14 @@
 
 Collaboratively pin locations on a map.
 
-## Get Started
+## Getting Started
 
+1. **Start the stack**
 ```bash
-docker compose up -d
+make up
 ```
+
+Application should run locally at `http://localhost:3012`
 
 ## Simple By Design
 
