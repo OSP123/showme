@@ -6,10 +6,11 @@
   import CreatePin from '$lib/CreatePin.svelte';
   import ShareMap from '$lib/ShareMap.svelte';
   import SyncStatus from '$lib/SyncStatus.svelte';
+  import PinFilter from '$lib/PinFilter.svelte';
   import { initLocalDb }    from '$lib/db/pglite';
   import { createMap, addPin, getPins } from '$lib/api';
   import type { Map as GLMap }  from 'maplibre-gl';
-  import type { PinData, MapRow } from '$lib/models';
+  import type { PinData, MapRow, PinType } from '$lib/models';
 
   let db: any;
   let mapId = '';
@@ -17,6 +18,8 @@
   let mapData: MapRow | null = null;
   let showCreatePin = false;
   let pinLocation: { lat: number; lng: number } | null = null;
+  let selectedPinTypes: PinType[] = [];
+  let showFilter = false;
 
   // OpenStreetMap raster style
   const osmStyle = {
@@ -175,6 +178,36 @@
     top: 16px;
     left: 16px;
     z-index: 100;
+    display: flex;
+    gap: 8px;
+    flex-direction: column;
+  }
+
+  .filter-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: white;
+    color: #333;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  .filter-toggle-btn:hover {
+    background: #f5f5f5;
+  }
+
+  .filter-panel {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    margin-top: 60px;
+    z-index: 100;
   }
 </style>
 
@@ -195,7 +228,22 @@
             isPrivate={mapData.is_private === 'true'}
           />
         {/if}
+        <button class="filter-toggle-btn" on:click={() => showFilter = !showFilter}>
+          <span>🔍</span>
+          Filter
+        </button>
       </div>
+
+      {#if showFilter}
+        <div class="filter-panel">
+          <PinFilter
+            bind:selectedTypes={selectedPinTypes}
+            on:filterChange={(e) => {
+              selectedPinTypes = e.detail.types;
+            }}
+          />
+        </div>
+      {/if}
 
       <MapView
         style={osmStyle}
@@ -208,6 +256,7 @@
         <PinLayer
           map={mapInstance}
           mapId={mapId}
+          filterTypes={selectedPinTypes}
         />
       {/if}
 

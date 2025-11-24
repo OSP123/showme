@@ -92,20 +92,33 @@ export function initLocalDb(): Promise<PGlite> {
 
     console.log('🔄 Setting up maps sync with params:', syncParams);
 
-    await pdb.electric.syncShapeToTable({
-      shape: { 
-        url: SHAPE_URL, 
-        params: syncParams 
-      },
-      table: 'maps',
-      primaryKey: ['id'],
-      shapeKey: 'maps',
-      initialInsertMethod: 'json'
-    });
-
-    // Only sync maps globally - pins will be synced per-map in PinLayer
-    // This avoids trying to sync all pins at once and potential schema issues
-    console.log('✅ Maps sync configured - pins will sync per-map in PinLayer component');
+    try {
+      await pdb.electric.syncShapeToTable({
+        shape: { 
+          url: SHAPE_URL, 
+          params: syncParams 
+        },
+        table: 'maps',
+        primaryKey: ['id'],
+        shapeKey: 'maps',
+        initialInsertMethod: 'json'
+      });
+      console.log('✅ Maps sync configured - pins will sync per-map in PinLayer component');
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      const statusCode = error?.status || error?.response?.status;
+      
+      // Handle 409 Conflict - this can happen if the shape handle is invalid/expired
+      // The app can still work offline, so we'll log it but continue
+      if (statusCode === 409 || errorMsg.includes('409') || errorMsg.includes('Conflict')) {
+        console.warn('⚠️ ElectricSQL sync conflict (409) - this is usually non-critical. App will continue in offline mode.');
+        console.warn('   If sync is needed, try refreshing the page or restarting ElectricSQL service.');
+      } else {
+        // For other errors, log but don't fail initialization
+        console.warn('⚠️ ElectricSQL sync setup failed (non-critical):', errorMsg);
+        console.warn('   App will continue in offline mode. Sync will be retried automatically.');
+      }
+    }
 
     // Add database change listeners for reactive updates
     console.log('📡 Setting up database change listeners...');

@@ -2,6 +2,53 @@
 import type { PGliteWithSync } from '@electric-sql/pglite-sync';
 import type { PinRow }        from './models';
 import { initLocalDb }        from './db/pglite';
+import { operationQueue }     from './operationQueue';
+
+// Check if a map exists in PostgreSQL
+async function ensureMapExistsInPostgres(db: PGliteWithSync, mapId: string): Promise<boolean> {
+  try {
+    // First check if map exists locally
+    const localResult = await db.query(
+      `SELECT * FROM maps WHERE id = $1`,
+      [mapId]
+    );
+    
+    if (localResult.rows.length === 0) {
+      console.warn(`⚠️ Map ${mapId} does not exist locally`);
+      return false;
+    }
+
+    const map = localResult.rows[0];
+    
+    // Check if map exists in PostgreSQL
+    const response = await fetch(`http://localhost:3015/maps?id=eq.${mapId}&select=id`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    
+    if (response.ok) {
+      const maps = await response.json();
+      if (maps.length > 0) {
+        return true; // Map exists in PostgreSQL
+      }
+    }
+    
+    // Map doesn't exist in PostgreSQL, try to create it
+    console.log(`🔄 Map ${mapId} not found in PostgreSQL, creating it...`);
+    const success = await saveToPostgres('maps', {
+      id: map.id,
+      name: map.name,
+      is_private: map.is_private === 'true',
+      access_token: map.access_token,
+      created_at: map.created_at
+    });
+    
+    return success;
+  } catch (error) {
+    console.error('Error checking/creating map in PostgreSQL:', error);
+    return false;
+  }
+}
 
 // Simple PostgreSQL HTTP client using PostgREST
 async function saveToPostgres(table: string, data: any) {
@@ -50,9 +97,27 @@ export async function createMap(
     
     if (success) {
       console.log('✅ Map saved to PostgreSQL - will sync via ElectricSQL');
+    } else {
+      console.warn('⚠️ Failed to save map to PostgreSQL, queueing for retry...');
+      // Queue for retry when online
+      await operationQueue.enqueue('createMap', {
+        id,
+        name,
+        is_private,
+        access_token,
+        created_at: now
+      });
     }
   } catch (error) {
-    console.error('❌ Failed to save map to PostgreSQL:', error);
+    console.warn('⚠️ Failed to save map to PostgreSQL, queueing for retry:', error);
+    // Queue for retry when online
+    await operationQueue.enqueue('createMap', {
+      id,
+      name,
+      is_private,
+      access_token,
+      created_at: now
+    });
   }
 
   // EXISTING: Save to local database (preserved exactly)
@@ -135,6 +200,27 @@ export async function addPin(
   // Write to PostgREST so pin appears on server for other clients
   // PostgREST expects TEXT[] arrays as JSON arrays (not strings)
   try {
+    // First, ensure the map exists in PostgreSQL
+    // This prevents foreign key constraint violations
+    const mapExists = await ensureMapExistsInPostgres(db, data.map_id);
+    if (!mapExists) {
+      console.warn('⚠️ Map does not exist in PostgreSQL yet, queueing pin for retry...');
+      // Queue pin for retry - it will be processed once the map is synced
+      const postgresData: any = {
+        id,
+        map_id: data.map_id,
+        lat: data.lat,
+        lng: data.lng,
+        description: data.description || null,
+        created_at: now,
+        updated_at: now,
+        tags: tagsArray.length > 0 ? tagsArray : [],
+        photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
+      };
+      await operationQueue.enqueue('addPin', postgresData);
+      return { id };
+    }
+
     const postgresData: any = {
       id,
       map_id: data.map_id,
@@ -154,9 +240,43 @@ export async function addPin(
     const success = await saveToPostgres('pins', postgresData);
     if (success) {
       console.log('✅ Pin saved to PostgreSQL - will sync to other clients');
+    } else {
+      console.warn('⚠️ Failed to save pin to PostgreSQL, queueing for retry...');
+      // Queue for retry when online
+      await operationQueue.enqueue('addPin', postgresData);
     }
-  } catch (error) {
-    console.warn('⚠️ Failed to save pin to PostgreSQL (will sync when online):', error);
+  } catch (error: any) {
+    const errorMsg = error?.message || String(error);
+    // Check if it's a foreign key constraint error
+    if (errorMsg.includes('foreign key constraint') || errorMsg.includes('23503')) {
+      console.warn('⚠️ Map does not exist in PostgreSQL, queueing pin for retry after map sync...');
+      const postgresData: any = {
+        id,
+        map_id: data.map_id,
+        lat: data.lat,
+        lng: data.lng,
+        description: data.description || null,
+        created_at: now,
+        updated_at: now,
+        tags: tagsArray.length > 0 ? tagsArray : [],
+        photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
+      };
+      await operationQueue.enqueue('addPin', postgresData);
+    } else {
+      console.warn('⚠️ Failed to save pin to PostgreSQL, queueing for retry:', error);
+      const postgresData: any = {
+        id,
+        map_id: data.map_id,
+        lat: data.lat,
+        lng: data.lng,
+        description: data.description || null,
+        created_at: now,
+        updated_at: now,
+        tags: tagsArray.length > 0 ? tagsArray : [],
+        photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
+      };
+      await operationQueue.enqueue('addPin', postgresData);
+    }
   }
 
   return { id };

@@ -34,7 +34,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['@electric-sql/pglite', '@electric-sql/pglite-sync'],
-    include: ['maplibre-gl']
+    include: ['maplibre-gl', 'supercluster']
   },
   build: {
     target: 'esnext'

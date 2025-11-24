@@ -1,0 +1,74 @@
+# Project Rules for Travel Safety Companion
+
+## ⚠️ CRITICAL RULE - READ FIRST ⚠️
+
+### NEVER MAKE UP UI PATHS OR LOCATIONS
+**THIS IS THE MOST COMMON AND FRUSTRATING MISTAKE. DO NOT DO THIS.**
+
+- **NEVER** say "Go to Settings → X → Y" unless you have verified this exact path exists
+- **NEVER** say "Check the logs in the dashboard under X → Y" unless you know this location exists
+- **NEVER** reference menu items, tabs, buttons, or navigation paths you haven't verified
+- **NEVER** guess where features are located in third-party tools (Vercel, Supabase, GitHub, etc.)
+- **ALWAYS** say "I don't know where that is located" or "Can you tell me where you see that?" instead
+- **ONLY** reference UI elements if you can verify them from official documentation or the user's description
+- **IF** you're about to mention a path like "Go to X → Y", STOP and ask the user instead
+
+**Examples of what NOT to say:**
+- ❌ "Check the Vercel function logs (in the Vercel dashboard under the deployment → Functions tab)"
+- ❌ "Go to Settings → General → Framework Preset"
+- ❌ "Navigate to Project Settings → Environment Variables"
+
+**Examples of what TO say:**
+- ✅ "I don't know where the logs are in Vercel's dashboard. Can you check the logs and share any errors you see?"
+- ✅ "I'm not sure where that setting is located. Can you tell me where you see it?"
+- ✅ "Please check the Vercel dashboard for any error messages and let me know what you find."
+
+## AI Assistant Behavior Guidelines
+
+### Testing and Verification
+- **ALWAYS test fixes thoroughly before claiming they are complete**
+- **NEVER claim something is "fixed" without proper verification**
+- **Always verify that changes actually work as intended**
+- **Be humble and admit when you're not sure about results**
+- **Do not let the process hang**
+
+### Communication Style
+- **Be careful about being overconfident**
+- **Don't assume fixes work without testing them**
+- **Ask for verification when unsure**
+- **Be honest about limitations and uncertainties**
+- **NEVER make up UI paths, menu locations, or navigation paths for websites/tools you haven't verified**
+- If you don't know the exact location of a setting or feature, say so explicitly
+- Don't guess or infer navigation paths (e.g., "Go to Settings → General → Framework Preset")
+- Instead, ask the user to navigate or provide the actual path they see
+- Only reference UI elements if you can verify them from documentation or the user's description
+
+### Development Practices
+- **Test all changes in the browser/application before declaring success**
+- **Verify API endpoints are working correctly**
+- **Check that UI changes render properly**
+- **Ensure backend and frontend integration is functioning**
+
+### Code Quality
+- **Follow existing code patterns and conventions**
+- **Maintain consistency with the current codebase structure**
+- **Use proper error handling and validation**
+- **Document complex logic and decisions**
+
+## Remember
+- **Test first, claim success second**
+- **Verify everything works before moving on**
+- **Be honest about what you can and cannot confirm**
+- **NEVER make up UI paths or locations - this is the most frustrating mistake**
+
+# Session History Logging
+
+- At the end of every user-facing task, append a concise summary to `/notes.md`.
+- If `/notes.md` does not exist, create it before writing the summary.
+- Use the following template for each entry:
+  - `Date: YYYY-MM-DD`
+  - `Tasks:`
+    - `...` (bullet list of what was completed)
+  - `Follow-ups:`
+    - `...` (bullet list of outstanding items or `None`)
+- Separate entries with a blank line for readability.
