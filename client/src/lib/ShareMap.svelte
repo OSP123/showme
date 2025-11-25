@@ -79,6 +79,8 @@
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
+    touch-action: manipulation; /* Prevent double-tap zoom */
+    min-height: 44px; /* Minimum touch target size */
   }
 
   .share-btn:hover {
@@ -98,11 +100,44 @@
     z-index: 200;
   }
 
-  @media (max-width: 500px) {
+  @media (max-width: 480px) {
+    .share-btn {
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+
     .share-panel {
-      min-width: 300px;
+      min-width: auto;
+      width: calc(100vw - 32px);
       left: auto;
       right: 0;
+      max-width: 320px;
+    }
+
+    .share-header {
+      padding: 12px;
+    }
+
+    .share-header h3 {
+      font-size: 16px;
+    }
+
+    .share-content {
+      padding: 12px;
+    }
+
+    .link-input-group {
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .link-input-group input {
+      font-size: 12px;
+    }
+
+    .copy-btn {
+      width: 100%;
+      padding: 10px;
     }
   }
 

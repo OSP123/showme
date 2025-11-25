@@ -30,6 +30,13 @@ describe('OperationQueue', () => {
       removeEventListener: vi.fn(),
     } as any;
 
+    // Mock navigator.onLine
+    Object.defineProperty(global, 'navigator', {
+      value: { onLine: true },
+      writable: true,
+      configurable: true,
+    });
+
     // Mock fetch
     global.fetch = vi.fn();
 
@@ -224,6 +231,339 @@ describe('OperationQueue', () => {
       expect(() => {
         new OperationQueue();
       }).not.toThrow();
+    });
+  });
+
+  describe('Phase 3 Features - Column Fallback', () => {
+    it('should retry without Phase 3 fields when columns dont exist', async () => {
+      const pinData = {
+        id: 'pin-1',
+        map_id: 'map-1',
+        lat: 40.7128,
+        lng: -74.0060,
+        type: 'medical',
+        expires_at: '2024-01-02T00:00:00Z',
+        tags: ['medical'],
+        photo_urls: [],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      };
+
+      // Set up mocks: map check succeeds, first pin call fails, second succeeds
+      let pinCallCount = 0;
+      (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
+        const urlStr = typeof url === 'string' ? url : '';
+        
+        // Map check call
+        if (urlStr.includes('/maps?id=eq.')) {
+          return {
+            ok: true,
+            json: async () => [{ id: 'map-1' }],
+          };
+        }
+        
+        // Pin POST calls
+        if (urlStr.includes('/pins') && options?.method === 'POST') {
+          pinCallCount++;
+          
+          // First pin call (with Phase 3 fields) - fails with column error
+          if (pinCallCount === 1) {
+            return {
+              ok: false,
+              status: 400,
+              text: async () => JSON.stringify({
+                code: 'PGRST204',
+                message: "Could not find the 'expires_at' column of 'pins' in the schema cache",
+              }),
+            };
+          }
+          
+          // Second pin call (without Phase 3 fields) - succeeds
+          if (pinCallCount === 2) {
+            return {
+              ok: true,
+              status: 200,
+              text: async () => '',
+            };
+          }
+        }
+        
+        // Default fallback
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+        };
+      });
+
+      await queue.enqueue('addPin', pinData);
+      
+      // Process queue - wait for all async operations
+      await queue.processQueue();
+      await vi.runAllTimersAsync();
+      await vi.advanceTimersByTimeAsync(100);
+
+      // Get all fetch calls
+      const allFetchCalls = (global.fetch as any).mock.calls || [];
+      
+      // Filter for pin POST calls (exclude map check GET calls)
+      const pinCalls = allFetchCalls.filter((call: any[]) => {
+        if (!call || !call[0]) return false;
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        const method = call[1]?.method || 'GET';
+        return url.includes('/pins') && method === 'POST';
+      });
+      
+      // Should have at least 2 calls (first attempt + fallback)
+      expect(pinCalls.length).toBeGreaterThanOrEqual(2);
+
+      // First call should have type and expires_at
+      const firstBody = JSON.parse(pinCalls[0][1].body);
+      expect(firstBody.type).toBe('medical');
+      expect(firstBody.expires_at).toBe('2024-01-02T00:00:00Z');
+
+      // Second call (fallback) should not have them
+      const secondBody = JSON.parse(pinCalls[1][1].body);
+      expect(secondBody.type).toBeUndefined();
+      expect(secondBody.expires_at).toBeUndefined();
+
+      // Queue should be empty after success
+      expect(queue.getQueueLength()).toBe(0);
+    });
+
+    it('should handle column error with JSON error response', async () => {
+      const pinData = {
+        id: 'pin-1',
+        map_id: 'map-1',
+        lat: 40.7128,
+        lng: -74.0060,
+        type: 'water',
+        expires_at: '2024-01-02T00:00:00Z',
+        tags: [],
+        photo_urls: [],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      };
+
+      // Set up mocks with implementation function
+      let mapCheckDone = false;
+      let pinCallCount = 0;
+      (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
+        const urlStr = typeof url === 'string' ? url : '';
+        
+        // Map check call
+        if (urlStr.includes('/maps?id=eq.')) {
+          mapCheckDone = true;
+          return {
+            ok: true,
+            json: async () => [{ id: 'map-1' }],
+          };
+        }
+        
+        // Pin calls
+        if (urlStr.includes('/pins') && options?.method === 'POST') {
+          pinCallCount++;
+          
+          // First pin call - fails with column error
+          if (pinCallCount === 1) {
+            return {
+              ok: false,
+              status: 400,
+              text: async () => JSON.stringify({
+                code: 'PGRST204',
+                message: "Could not find the 'type' column of 'pins' in the schema cache",
+              }),
+            };
+          }
+          
+          // Second pin call (fallback) - succeeds
+          if (pinCallCount === 2) {
+            return {
+              ok: true,
+              status: 200,
+              text: async () => '',
+            };
+          }
+        }
+        
+        // Default fallback
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+        };
+      });
+
+      await queue.enqueue('addPin', pinData);
+      
+      // Process queue - wait for all async operations
+      await queue.processQueue();
+      await vi.runAllTimersAsync();
+      await vi.advanceTimersByTimeAsync(100);
+
+      // Get all fetch calls to debug
+      const allFetchCalls = (global.fetch as any).mock.calls || [];
+      
+      // Filter for pin POST calls (exclude map check GET calls)
+      const pinCalls = allFetchCalls.filter((call: any[]) => {
+        if (!call || !call[0]) return false;
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        const method = call[1]?.method || 'GET';
+        return url.includes('/pins') && method === 'POST';
+      });
+      
+      // Debug: log all fetch calls
+      if (pinCalls.length < 2) {
+        console.log('All fetch calls:', allFetchCalls.map((call: any[]) => ({
+          url: typeof call[0] === 'string' ? call[0] : 'unknown',
+          method: call[1]?.method || 'GET',
+        })));
+      }
+      
+      // Should have made 2 pin calls (first attempt + fallback)
+      expect(pinCalls.length).toBeGreaterThanOrEqual(2);
+      
+      // Queue should be empty after successful fallback
+      expect(queue.getQueueLength()).toBe(0);
+    });
+
+    it('should queue for retry if fallback also fails', async () => {
+      const pinData = {
+        id: 'pin-1',
+        map_id: 'map-1',
+        lat: 40.7128,
+        lng: -74.0060,
+        type: 'checkpoint',
+        expires_at: '2024-01-02T00:00:00Z',
+        tags: [],
+        photo_urls: [],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      };
+
+      // Mock map exists check
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ id: 'map-1' }],
+      });
+
+      let pinCallCount = 0;
+      // Mock map check + pin calls
+      (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
+        const urlStr = typeof url === 'string' ? url : '';
+        
+        // Map check call
+        if (urlStr.includes('/maps?id=eq.')) {
+          return {
+            ok: true,
+            json: async () => [{ id: 'map-1' }],
+          };
+        }
+        
+        // Pin POST calls
+        if (urlStr.includes('/pins') && options?.method === 'POST') {
+          pinCallCount++;
+          
+          // First call fails with column error
+          if (pinCallCount === 1) {
+            return {
+              ok: false,
+              status: 400,
+              text: async () => JSON.stringify({
+                code: 'PGRST204',
+                message: "Could not find the 'expires_at' column of 'pins' in the schema cache",
+              }),
+            };
+          }
+          
+          // Fallback call also fails
+          if (pinCallCount === 2) {
+            return {
+              ok: false,
+              status: 500,
+              text: async () => 'Server Error',
+            };
+          }
+        }
+        
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+        };
+      });
+
+      await queue.enqueue('addPin', pinData);
+      await queue.processQueue();
+      
+      // Don't run all timers - that might trigger retry delays and process the queue again
+      // Just wait a bit for the current operation to complete
+      await vi.advanceTimersByTimeAsync(10);
+
+      // Should still be in queue for retry (both calls failed)
+      // After 1 retry, it should still be in queue (MAX_RETRIES is 3)
+      expect(queue.getQueueLength()).toBe(1);
+    });
+
+    it('should handle map not existing in PostgreSQL', async () => {
+      const pinData = {
+        id: 'pin-1',
+        map_id: 'map-1',
+        lat: 40.7128,
+        lng: -74.0060,
+        tags: [],
+        photo_urls: [],
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      };
+
+      // Map doesn't exist (empty array means map not found)
+      (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
+        const urlStr = typeof url === 'string' ? url : '';
+        
+        // Map check call - returns empty array (map doesn't exist)
+        if (urlStr.includes('/maps?id=eq.')) {
+          return {
+            ok: true,
+            json: async () => [], // Map not found
+          };
+        }
+        
+        // Should not reach here, but if it does, return success
+        return {
+          ok: true,
+          status: 200,
+          text: async () => '',
+        };
+      });
+
+      await queue.enqueue('addPin', pinData);
+      
+      // Verify initial state
+      expect(queue.getQueueLength()).toBe(1);
+      
+      // Process queue once - operation should fail because map doesn't exist
+      // executeOperation returns false when map doesn't exist, so operation stays in queue
+      await queue.processQueue();
+      
+      // Don't run all timers - that might trigger retry delays and process the queue again
+      // Just wait a bit for the current operation to complete
+      await vi.advanceTimersByTimeAsync(10);
+
+      // Should not attempt to create pin, should remain in queue
+      // executeOperation returns false, so retries++ but operation stays (MAX_RETRIES is 3)
+      // After 1 retry, it should still be in queue
+      expect(queue.getQueueLength()).toBe(1);
+      
+      // Should not have called /pins endpoint (only map check should be called)
+      const allCalls = (global.fetch as any).mock.calls || [];
+      const pinCalls = allCalls.filter((call: any[]) => {
+        if (!call || !call[0]) return false;
+        const url = typeof call[0] === 'string' ? call[0] : '';
+        const method = call[1]?.method || 'GET';
+        return url.includes('/pins') && method === 'POST';
+      });
+      expect(pinCalls).toHaveLength(0);
     });
   });
 });

@@ -294,23 +294,51 @@
                     ? JSON.stringify(serverPin.photo_urls)
                     : (serverPin.photo_urls || '[]');
                   
-                  // Insert into local database
-                  await db.query(
-                    `INSERT INTO pins (id, map_id, lat, lng, tags, description, photo_urls, created_at, updated_at)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                     ON CONFLICT (id) DO NOTHING`,
-                    [
-                      serverPin.id,
-                      serverPin.map_id,
-                      serverPin.lat,
-                      serverPin.lng,
-                      tagsJson,
-                      serverPin.description || null,
-                      photoUrlsJson,
-                      serverPin.created_at,
-                      serverPin.updated_at
-                    ]
-                  );
+                  // Insert into local database (include new Phase 3 fields if they exist)
+                  // Try with new columns first, fall back to old schema if needed
+                  try {
+                    await db.query(
+                      `INSERT INTO pins (id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at)
+                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                       ON CONFLICT (id) DO NOTHING`,
+                      [
+                        serverPin.id,
+                        serverPin.map_id,
+                        serverPin.lat,
+                        serverPin.lng,
+                        serverPin.type || null,
+                        tagsJson,
+                        serverPin.description || null,
+                        photoUrlsJson,
+                        serverPin.expires_at || null,
+                        serverPin.created_at,
+                        serverPin.updated_at
+                      ]
+                    );
+                  } catch (insertError: any) {
+                    // If new columns don't exist, fall back to old schema
+                    const errorMsg = insertError?.message || String(insertError);
+                    if (errorMsg.includes('expires_at') || errorMsg.includes('type') || errorMsg.includes('does not exist')) {
+                      await db.query(
+                        `INSERT INTO pins (id, map_id, lat, lng, tags, description, photo_urls, created_at, updated_at)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                         ON CONFLICT (id) DO NOTHING`,
+                        [
+                          serverPin.id,
+                          serverPin.map_id,
+                          serverPin.lat,
+                          serverPin.lng,
+                          tagsJson,
+                          serverPin.description || null,
+                          photoUrlsJson,
+                          serverPin.created_at,
+                          serverPin.updated_at
+                        ]
+                      );
+                    } else {
+                      throw insertError;
+                    }
+                  }
                   
                   // Redraw to show new pin
                   await drawPins();

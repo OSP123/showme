@@ -4,9 +4,11 @@
   import MapView   from '$lib/MapView.svelte';
   import PinLayer  from '$lib/PinLayer.svelte';
   import CreatePin from '$lib/CreatePin.svelte';
+  import QuickPin from '$lib/QuickPin.svelte';
   import ShareMap from '$lib/ShareMap.svelte';
   import SyncStatus from '$lib/SyncStatus.svelte';
   import PinFilter from '$lib/PinFilter.svelte';
+  import PanicWipe from '$lib/PanicWipe.svelte';
   import { initLocalDb }    from '$lib/db/pglite';
   import { createMap, addPin, getPins } from '$lib/api';
   import type { Map as GLMap }  from 'maplibre-gl';
@@ -17,9 +19,11 @@
   let mapInstance: GLMap | null = null;
   let mapData: MapRow | null = null;
   let showCreatePin = false;
+  let showQuickPin = false;
   let pinLocation: { lat: number; lng: number } | null = null;
   let selectedPinTypes: PinType[] = [];
   let showFilter = false;
+  let showPanicWipe = false;
 
   // OpenStreetMap raster style
   const osmStyle = {
@@ -45,7 +49,12 @@
   };
 
   // Debug logging
-  $: console.log('App state:', { mapId, mapInstance, db });
+  $: {
+    console.log('App state:', { mapId, mapInstance: !!mapInstance, db: !!db });
+    if (!mapId && db) {
+      console.log('ℹ️ No mapId - showing CreateMap screen. Create a map or add ?map=<id> to URL');
+    }
+  }
 
   onMount(async () => {
     db = await initLocalDb();
@@ -56,6 +65,21 @@
     if (urlMapId) {
       mapId = urlMapId;
       await loadMapData();
+    } else {
+      // If no mapId in URL, try to load the first available map
+      try {
+        const result = await db.query('SELECT id FROM maps ORDER BY created_at DESC LIMIT 1');
+        if (result.rows.length > 0) {
+          mapId = result.rows[0].id;
+          // Update URL to include the map ID
+          const url = new URL(window.location.href);
+          url.searchParams.set('map', mapId);
+          window.history.replaceState({}, '', url);
+          await loadMapData();
+        }
+      } catch (error) {
+        console.error('Failed to load first map:', error);
+      }
     }
   });
 
@@ -101,7 +125,8 @@
     mapInstance.on('click', ({ lngLat }) => {
       console.log('Map clicked at:', lngLat);
       pinLocation = { lat: lngLat.lat, lng: lngLat.lng };
-      showCreatePin = true;
+      // Show QuickPin by default for crisis scenarios
+      showQuickPin = true;
     });
   }
 
@@ -121,15 +146,43 @@
       
       // Close the pin creation modal
       showCreatePin = false;
+      showQuickPin = false;
       pinLocation = null;
     } catch (error) {
       console.error('Failed to add pin:', error);
     }
   }
 
+  async function handleQuickPinCreate(event: CustomEvent<{ type: PinType; lat: number; lng: number }>) {
+    if (!pinLocation) return;
+    
+    try {
+      const pinData: PinData = {
+        map_id: mapId,
+        lat: event.detail.lat,
+        lng: event.detail.lng,
+        type: event.detail.type,
+      };
+      
+      await addPin(db, pinData);
+      console.log('Quick pin added successfully');
+      
+      // Close the quick pin modal
+      showQuickPin = false;
+      pinLocation = null;
+    } catch (error) {
+      console.error('Failed to add quick pin:', error);
+    }
+  }
+
   function handlePinCancel() {
     showCreatePin = false;
+    showQuickPin = false;
     pinLocation = null;
+  }
+
+  function handlePanicWipeComplete() {
+    showPanicWipe = false;
   }
 
   // Reactive: load map data when mapId changes
@@ -163,6 +216,13 @@
     background-color: #e0e0e0; /* Debug background */
     min-height: 500px; /* Ensure minimum height */
   }
+
+  @media (max-width: 480px) {
+    .map-container {
+      min-height: 100vh;
+      min-height: -webkit-fill-available; /* iOS Safari fix */
+    }
+  }
   
   .create-map-container {
     display: flex;
@@ -183,6 +243,39 @@
     flex-direction: column;
   }
 
+  @media (max-width: 480px) {
+    .map-controls {
+      top: 8px;
+      left: 8px;
+      gap: 6px;
+    }
+
+    .filter-toggle-btn {
+      padding: 10px;
+      font-size: 20px;
+      gap: 0;
+      min-width: 44px; /* Minimum touch target size */
+      justify-content: center;
+    }
+
+    .filter-toggle-btn span:last-child {
+      display: none; /* Hide "Filter" text on mobile, show only icon */
+    }
+
+    .panic-btn {
+      padding: 10px 14px;
+      font-size: 13px;
+      gap: 4px;
+      min-width: 44px; /* Minimum touch target size */
+    }
+
+    .filter-panel {
+      top: 8px;
+      left: 8px;
+      margin-top: 50px;
+    }
+  }
+
   .filter-toggle-btn {
     display: flex;
     align-items: center;
@@ -196,10 +289,32 @@
     font-size: 14px;
     font-weight: 500;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    touch-action: manipulation; /* Prevent double-tap zoom */
   }
 
   .filter-toggle-btn:hover {
     background: #f5f5f5;
+  }
+
+  .panic-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: #dc2626;
+    color: white;
+    border: 1px solid #b91c1c;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    touch-action: manipulation; /* Prevent double-tap zoom */
+    min-height: 44px; /* Minimum touch target size */
+  }
+
+  .panic-btn:hover {
+    background: #b91c1c;
   }
 
   .filter-panel {
@@ -232,6 +347,13 @@
           <span>🔍</span>
           Filter
         </button>
+        <button 
+          class="panic-btn" 
+          on:click={() => showPanicWipe = true}
+          title="Emergency data wipe"
+        >
+          🚨 Wipe
+        </button>
       </div>
 
       {#if showFilter}
@@ -260,6 +382,20 @@
         />
       {/if}
 
+      {#if showQuickPin && pinLocation}
+        <QuickPin
+          lat={pinLocation.lat}
+          lng={pinLocation.lng}
+          open={showQuickPin}
+          on:create={handleQuickPinCreate}
+          on:cancel={handlePinCancel}
+          on:advanced={() => {
+            showQuickPin = false;
+            showCreatePin = true;
+          }}
+        />
+      {/if}
+
       {#if showCreatePin && pinLocation}
         <CreatePin
           lat={pinLocation.lat}
@@ -269,6 +405,13 @@
           on:cancel={handlePinCancel}
         />
       {/if}
+
+      <PanicWipe
+        {db}
+        open={showPanicWipe}
+        on:wiped={handlePanicWipeComplete}
+        on:cancel={() => showPanicWipe = false}
+      />
     </div>
   {/if}
 </main>

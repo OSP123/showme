@@ -223,5 +223,25 @@
     font-size: 11px;
     line-height: 1.4;
   }
+
+  /* Mobile optimizations */
+  @media (max-width: 480px) {
+    .sync-status {
+      top: 8px;
+      right: 8px;
+    }
+
+    .status-button {
+      padding: 6px 10px;
+      font-size: 11px;
+    }
+
+    .status-details {
+      right: 0;
+      left: auto;
+      min-width: 180px;
+      max-width: calc(100vw - 16px);
+    }
+  }
 </style>
 

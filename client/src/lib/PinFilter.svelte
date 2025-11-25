@@ -35,7 +35,6 @@
 
 <div class="pin-filter">
   <div class="filter-header">
-    <h3>Filter Pins</h3>
     {#if selectedTypes.length > 0}
       <button class="clear-btn" on:click={clearFilters}>Clear</button>
     {/if}
@@ -73,19 +72,35 @@
     padding: 16px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     min-width: 200px;
+    max-width: calc(100vw - 32px);
+  }
+
+  @media (max-width: 480px) {
+    .pin-filter {
+      padding: 12px;
+      min-width: auto;
+      width: calc(100vw - 32px);
+    }
+
+    .filter-type-btn {
+      padding: 10px;
+      font-size: 13px;
+    }
+
+    .emoji {
+      font-size: 20px;
+    }
+
+    .label {
+      font-size: 13px;
+    }
   }
 
   .filter-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     margin-bottom: 12px;
-  }
-
-  .filter-header h3 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 600;
   }
 
   .clear-btn {
@@ -120,6 +135,8 @@
     transition: all 0.2s;
     text-align: left;
     width: 100%;
+    touch-action: manipulation; /* Prevent double-tap zoom */
+    min-height: 44px; /* Minimum touch target size */
   }
 
   .filter-type-btn:hover {

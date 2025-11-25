@@ -106,11 +106,16 @@ describe('API Functions', () => {
     };
 
     it('should add a pin with correct data', async () => {
+      // Mock map query (for fuzzing check)
+      (mockDb.query as any).mockResolvedValueOnce({
+        rows: [{ fuzzing_enabled: 'false' }],
+      });
+
       const result = await addPin(mockDb, pinData);
 
       expect(result).toHaveProperty('id');
 
-      // Verify database insert
+      // Verify database insert (now includes type and expires_at)
       expect(mockDb.query).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO pins'),
         expect.arrayContaining([
@@ -118,23 +123,31 @@ describe('API Functions', () => {
           pinData.map_id,
           pinData.lat,
           pinData.lng,
-          expect.stringContaining('medical'),
+          pinData.type, // type column
+          expect.stringContaining('medical'), // tags
           pinData.description,
-          expect.any(String),
-          expect.any(String),
-          expect.any(String),
+          expect.any(String), // photo_urls
+          expect.any(String), // expires_at
+          expect.any(String), // created_at
+          expect.any(String), // updated_at
         ])
       );
     });
 
     it('should include type in tags array', async () => {
+      // Mock map query (for fuzzing check)
+      (mockDb.query as any).mockResolvedValueOnce({
+        rows: [{ fuzzing_enabled: 'false' }],
+      });
+
       await addPin(mockDb, pinData);
 
       const insertCall = (mockDb.query as any).mock.calls.find((call: any[]) =>
         call[0].includes('INSERT INTO pins')
       );
 
-      const tagsJson = insertCall[1][4]; // tags is 5th parameter (index 4)
+      // tags is now 6th parameter (index 5) after adding type column
+      const tagsJson = insertCall[1][5];
       const tags = JSON.parse(tagsJson);
 
       expect(tags).toContain('medical');
@@ -149,6 +162,11 @@ describe('API Functions', () => {
         lng: -74.0060,
       };
 
+      // Mock map query (for fuzzing check)
+      (mockDb.query as any).mockResolvedValueOnce({
+        rows: [{ fuzzing_enabled: 'false' }],
+      });
+
       const result = await addPin(mockDb, minimalPin);
 
       expect(result).toHaveProperty('id');
@@ -157,8 +175,12 @@ describe('API Functions', () => {
         call[0].includes('INSERT INTO pins')
       );
 
-      expect(insertCall[1][5]).toBeNull(); // description
-      expect(insertCall[1][6]).toBe('[]'); // photo_urls
+      // Parameters shifted: id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at
+      expect(insertCall[1][6]).toBeNull(); // description (index 6)
+      expect(insertCall[1][7]).toBe('[]'); // photo_urls (index 7)
+      expect(insertCall[1][5]).toBe('[]'); // tags (index 5)
+      expect(insertCall[1][4]).toBeNull(); // type (index 4)
+      expect(insertCall[1][8]).toBeNull(); // expires_at (index 8)
     });
 
     it('should queue operation if PostgREST fails', async () => {
@@ -201,6 +223,7 @@ describe('API Functions', () => {
         },
       ];
 
+      // Mock the query with expiration filter (getPins now filters by expires_at by default)
       (mockDb.query as any).mockResolvedValueOnce({
         rows: mockPins,
       });
@@ -215,9 +238,10 @@ describe('API Functions', () => {
         lng: -74.0060,
       });
 
+      // getPins now filters by expires_at by default
       expect(mockDb.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT * FROM pins'),
-        ['test-map-id']
+        expect.stringContaining('expires_at IS NULL OR expires_at >'),
+        expect.arrayContaining(['test-map-id', expect.any(String)])
       );
     });
 

@@ -58,11 +58,13 @@ export function initLocalDb(): Promise<PGlite> {
     // Create tables
     await pdb.exec(`
       CREATE TABLE IF NOT EXISTS maps (
-        id           TEXT PRIMARY KEY,
-        name         TEXT NOT NULL,
-        is_private   TEXT NOT NULL DEFAULT 'false',
-        access_token TEXT,
-        created_at   TEXT NOT NULL
+        id             TEXT PRIMARY KEY,
+        name           TEXT NOT NULL,
+        is_private     TEXT NOT NULL DEFAULT 'false',
+        access_token   TEXT,
+        fuzzing_enabled TEXT NOT NULL DEFAULT 'false',
+        fuzzing_radius  INTEGER NOT NULL DEFAULT 100,
+        created_at     TEXT NOT NULL
       );
     `);
     await pdb.exec(`
@@ -71,13 +73,61 @@ export function initLocalDb(): Promise<PGlite> {
         map_id       TEXT NOT NULL,
         lat          DOUBLE PRECISION NOT NULL,
         lng          DOUBLE PRECISION NOT NULL,
+        type         TEXT,
         tags         TEXT NOT NULL DEFAULT '{}',
         description  TEXT,
         photo_urls   TEXT NOT NULL DEFAULT '{}',
+        expires_at   TEXT,
         created_at   TEXT NOT NULL,
         updated_at   TEXT NOT NULL
       );
     `);
+
+    // Migrate existing databases: add new columns if they don't exist
+    // Simply try to add them and catch "duplicate column" errors
+    console.log('🔄 Checking for database migrations...');
+    
+    // Migrate pins table
+    try {
+      await pdb.exec(`ALTER TABLE pins ADD COLUMN expires_at TEXT`);
+      console.log('✅ Added expires_at column to pins table');
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      if (!errorMsg.includes('duplicate column') && !errorMsg.includes('already exists')) {
+        console.warn('⚠️ Could not add expires_at column:', errorMsg);
+      }
+    }
+    
+    try {
+      await pdb.exec(`ALTER TABLE pins ADD COLUMN type TEXT`);
+      console.log('✅ Added type column to pins table');
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      if (!errorMsg.includes('duplicate column') && !errorMsg.includes('already exists')) {
+        console.warn('⚠️ Could not add type column:', errorMsg);
+      }
+    }
+
+    // Migrate maps table
+    try {
+      await pdb.exec(`ALTER TABLE maps ADD COLUMN fuzzing_enabled TEXT NOT NULL DEFAULT 'false'`);
+      console.log('✅ Added fuzzing_enabled column to maps table');
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      if (!errorMsg.includes('duplicate column') && !errorMsg.includes('already exists')) {
+        console.warn('⚠️ Could not add fuzzing_enabled column:', errorMsg);
+      }
+    }
+    
+    try {
+      await pdb.exec(`ALTER TABLE maps ADD COLUMN fuzzing_radius INTEGER NOT NULL DEFAULT 100`);
+      console.log('✅ Added fuzzing_radius column to maps table');
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
+      if (!errorMsg.includes('duplicate column') && !errorMsg.includes('already exists')) {
+        console.warn('⚠️ Could not add fuzzing_radius column:', errorMsg);
+      }
+    }
 
     // Setup sync for maps only (pins will be synced per-map in PinLayer)
     const syncParams: any = { 
@@ -154,6 +204,18 @@ export function initLocalDb(): Promise<PGlite> {
 
     console.log('PGlite initialized successfully');
     db = pdb;
+    
+    // Start expired pins cleanup (deferred to avoid circular dependencies)
+    setTimeout(async () => {
+      try {
+        const { startExpiredPinsCleanup } = await import('$lib/expiredPinsCleanup');
+        startExpiredPinsCleanup(pdb, 5 * 60 * 1000); // Clean up every 5 minutes
+        console.log('🧹 Started expired pins cleanup (every 5 minutes)');
+      } catch (error) {
+        console.warn('⚠️ Could not start expired pins cleanup:', error);
+      }
+    }, 1000);
+    
     return pdb;
   })();
 

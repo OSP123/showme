@@ -322,5 +322,45 @@
   .btn-secondary:hover {
     background: #e0e0e0;
   }
+
+  /* Mobile optimizations */
+  @media (max-width: 480px) {
+    .create-pin-container {
+      padding: 20px;
+      max-width: calc(100vw - 32px);
+    }
+
+    .create-pin-header h2 {
+      font-size: 20px;
+    }
+
+    .pin-types-grid {
+      gap: 8px;
+    }
+
+    .pin-type-btn {
+      padding: 12px 8px;
+      min-height: 70px;
+    }
+
+    .emoji {
+      font-size: 20px;
+    }
+
+    .label {
+      font-size: 11px;
+    }
+
+    .form-actions {
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+      width: 100%;
+      padding: 12px;
+    }
+  }
 </style>
 

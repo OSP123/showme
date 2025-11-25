@@ -3,8 +3,6 @@
 import { describe, it } from 'vitest';
 
 describe.skip('PinFilter Component', () => {
-
-describe('PinFilter Component', () => {
   let selectedTypes: PinType[] = [];
   let filterChangeHandler: (event: CustomEvent<{ types: PinType[] }>) => void;
 

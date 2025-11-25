@@ -1,8 +1,10 @@
 // src/lib/api.ts
 import type { PGliteWithSync } from '@electric-sql/pglite-sync';
-import type { PinRow }        from './models';
+import type { PinRow, PinData } from './models';
+import { PIN_TTL_HOURS } from './models';
 import { initLocalDb }        from './db/pglite';
 import { operationQueue }     from './operationQueue';
+import { fuzzCoordinates }    from './fuzzing';
 
 // Check if a map exists in PostgreSQL
 async function ensureMapExistsInPostgres(db: PGliteWithSync, mapId: string): Promise<boolean> {
@@ -64,6 +66,24 @@ async function saveToPostgres(table: string, data: any) {
     
     if (!response.ok) {
       const errorText = await response.text();
+      // Check if it's a column doesn't exist error (for backward compatibility)
+      // PostgREST error: "Could not find the 'expires_at' column of 'pins' in the schema cache"
+      const isColumnError = errorText.includes('column') && (
+        errorText.includes('does not exist') || 
+        errorText.includes('Could not find') ||
+        errorText.includes('PGRST204')
+      );
+      
+      if (isColumnError) {
+        // For pins table, try again without the new Phase 3 fields
+        if (table === 'pins' && (data.type || data.expires_at)) {
+          const fallbackData = { ...data };
+          delete fallbackData.type;
+          delete fallbackData.expires_at;
+          console.debug('🔄 Retrying without Phase 3 fields (columns not migrated yet)...');
+          return await saveToPostgres(table, fallbackData);
+        }
+      }
       console.error(`PostgreSQL save failed (${response.status}):`, errorText);
       throw new Error(`PostgreSQL save failed: ${response.statusText} - ${errorText}`);
     }
@@ -149,14 +169,35 @@ export async function createMap(
 
 export async function getPins(
   db: PGliteWithSync,
-  mapId: string
+  mapId: string,
+  includeExpired: boolean = false
 ): Promise<PinRow[]> {
-  // EXISTING: Unchanged
-  const res = await db.query(
-    `SELECT * FROM pins WHERE map_id = $1 ORDER BY created_at`,
-    [mapId]
-  );
-  return res.rows;
+  // For backward compatibility, check if expires_at column exists first
+  try {
+    // Try to query with expires_at filter
+    const now = new Date().toISOString();
+    const query = includeExpired
+      ? `SELECT * FROM pins WHERE map_id = $1 ORDER BY created_at DESC`
+      : `SELECT * FROM pins 
+         WHERE map_id = $1 
+         AND (expires_at IS NULL OR expires_at > $2)
+         ORDER BY created_at DESC`;
+    
+    const params = includeExpired ? [mapId] : [mapId, now];
+    const res = await db.query(query, params);
+    return res.rows;
+  } catch (error: any) {
+    // If expires_at column doesn't exist, fall back to simple query
+    const errorMsg = error?.message || String(error);
+    if (errorMsg.includes('expires_at') || errorMsg.includes('does not exist')) {
+      const res = await db.query(
+        `SELECT * FROM pins WHERE map_id = $1 ORDER BY created_at DESC`,
+        [mapId]
+      );
+      return res.rows;
+    }
+    throw error;
+  }
 }
 
 import type { PinData } from './models';
@@ -178,20 +219,58 @@ export async function addPin(
   // Process photo URLs
   const photoUrlsJson = JSON.stringify(data.photo_urls || []);
 
+  // Calculate expiration time (TTL) based on pin type
+  let expiresAt: string | null = null;
+  if (data.type && PIN_TTL_HOURS[data.type]) {
+    const expirationDate = new Date();
+    expirationDate.setHours(expirationDate.getHours() + PIN_TTL_HOURS[data.type]);
+    expiresAt = expirationDate.toISOString();
+  } else if (data.expires_at) {
+    expiresAt = data.expires_at;
+  }
+
+  // Apply fuzzing if map has it enabled
+  let finalLat = data.lat;
+  let finalLng = data.lng;
+  
+  try {
+    const mapResult = await db.query(
+      `SELECT fuzzing_enabled, fuzzing_radius FROM maps WHERE id = $1`,
+      [data.map_id]
+    );
+    
+    if (mapResult.rows.length > 0) {
+      const map = mapResult.rows[0];
+      const fuzzingEnabled = map.fuzzing_enabled === 'true' || map.fuzzing_enabled === true;
+      const fuzzingRadius = map.fuzzing_radius || 100;
+      
+      if (fuzzingEnabled) {
+        const fuzzed = fuzzCoordinates(data.lat, data.lng, fuzzingRadius);
+        finalLat = fuzzed.lat;
+        finalLng = fuzzed.lng;
+        console.log(`🔒 Applied fuzzing: ${data.lat},${data.lng} → ${finalLat},${finalLng}`);
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ Could not check fuzzing settings, using original coordinates:', error);
+  }
+
   // Save to local database first (offline-first)
   await db.query(
     `INSERT INTO pins
-      (id,map_id,lat,lng,tags,description,photo_urls,created_at,updated_at)
+      (id,map_id,lat,lng,type,tags,description,photo_urls,expires_at,created_at,updated_at)
      VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
     [
       id,
       data.map_id,
-      data.lat,
-      data.lng,
+      finalLat,
+      finalLng,
+      data.type || null,
       tagsJson,
       data.description || null,
       photoUrlsJson,
+      expiresAt,
       now,
       now
     ]
@@ -200,50 +279,47 @@ export async function addPin(
   // Write to PostgREST so pin appears on server for other clients
   // PostgREST expects TEXT[] arrays as JSON arrays (not strings)
   try {
-    // First, ensure the map exists in PostgreSQL
-    // This prevents foreign key constraint violations
-    const mapExists = await ensureMapExistsInPostgres(db, data.map_id);
-    if (!mapExists) {
-      console.warn('⚠️ Map does not exist in PostgreSQL yet, queueing pin for retry...');
-      // Queue pin for retry - it will be processed once the map is synced
-      const postgresData: any = {
-        id,
-        map_id: data.map_id,
-        lat: data.lat,
-        lng: data.lng,
-        description: data.description || null,
-        created_at: now,
-        updated_at: now,
-        tags: tagsArray.length > 0 ? tagsArray : [],
-        photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
-      };
-      await operationQueue.enqueue('addPin', postgresData);
-      return { id };
-    }
-
+    // Build PostgREST payload
     const postgresData: any = {
       id,
       map_id: data.map_id,
-      lat: data.lat,
-      lng: data.lng,
+      lat: finalLat,
+      lng: finalLng,
       description: data.description || null,
       created_at: now,
-      updated_at: now
+      updated_at: now,
+      tags: tagsArray.length > 0 ? tagsArray : [],
+      photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
     };
     
-    // PostgREST expects TEXT[] columns as JSON arrays
-    postgresData.tags = tagsArray.length > 0 ? tagsArray : [];
-    postgresData.photo_urls = (data.photo_urls && data.photo_urls.length > 0) 
-      ? data.photo_urls 
-      : [];
+    // Only add Phase 3 fields if they have values
+    // saveToPostgres will automatically retry without them if columns don't exist
+    if (data.type) {
+      postgresData.type = data.type;
+    }
+    if (expiresAt) {
+      postgresData.expires_at = expiresAt;
+    }
     
+    // Try to save directly - saveToPostgres handles column errors with fallback
+    // If map doesn't exist, we'll get a foreign key error and queue it
     const success = await saveToPostgres('pins', postgresData);
+    
     if (success) {
       console.log('✅ Pin saved to PostgreSQL - will sync to other clients');
+      // Trigger immediate UI update
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('db-change', { 
+          detail: { table: 'pins', data: { id, map_id: data.map_id } } 
+        }));
+      }
     } else {
       console.warn('⚠️ Failed to save pin to PostgreSQL, queueing for retry...');
-      // Queue for retry when online
-      await operationQueue.enqueue('addPin', postgresData);
+      // Remove Phase 3 fields for queue (backward compatibility)
+      const queuedData = { ...postgresData };
+      delete queuedData.type;
+      delete queuedData.expires_at;
+      await operationQueue.enqueue('addPin', queuedData);
     }
   } catch (error: any) {
     const errorMsg = error?.message || String(error);
@@ -253,28 +329,40 @@ export async function addPin(
       const postgresData: any = {
         id,
         map_id: data.map_id,
-        lat: data.lat,
-        lng: data.lng,
+        lat: finalLat,
+        lng: finalLng,
         description: data.description || null,
         created_at: now,
         updated_at: now,
         tags: tagsArray.length > 0 ? tagsArray : [],
         photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
       };
+      if (data.type) {
+        postgresData.type = data.type;
+      }
+      if (expiresAt) {
+        postgresData.expires_at = expiresAt;
+      }
       await operationQueue.enqueue('addPin', postgresData);
     } else {
       console.warn('⚠️ Failed to save pin to PostgreSQL, queueing for retry:', error);
       const postgresData: any = {
         id,
         map_id: data.map_id,
-        lat: data.lat,
-        lng: data.lng,
+        lat: finalLat,
+        lng: finalLng,
         description: data.description || null,
         created_at: now,
         updated_at: now,
         tags: tagsArray.length > 0 ? tagsArray : [],
         photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
       };
+      if (data.type) {
+        postgresData.type = data.type;
+      }
+      if (expiresAt) {
+        postgresData.expires_at = expiresAt;
+      }
       await operationQueue.enqueue('addPin', postgresData);
     }
   }

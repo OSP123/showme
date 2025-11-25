@@ -7,6 +7,8 @@ export interface MapRow {
   is_private: 'true' | 'false';
   access_token: string | null;
   created_at: string; // ISO timestamp
+  fuzzing_enabled?: boolean;
+  fuzzing_radius?: number; // in meters
 }
 
 /** A row from the `pins` table */
@@ -18,6 +20,8 @@ export interface PinRow {
   tags: string | null;         // JSON-encoded
   description: string | null;
   photo_urls: string | null;   // JSON-encoded
+  type: string | null;         // PinType
+  expires_at: string | null;  // ISO timestamp
   created_at: string;
   updated_at: string;
 }
@@ -41,4 +45,16 @@ export interface PinData {
   tags?: string[];
   description?: string;
   photo_urls?: string[];
+  expires_at?: string; // ISO timestamp for TTL
 }
+
+/** Pin TTL configuration per type (in hours) */
+export const PIN_TTL_HOURS: Record<PinType, number> = {
+  medical: 24,      // Medical facilities: 24 hours
+  water: 12,        // Water sources: 12 hours
+  checkpoint: 2,    // Checkpoints: 2 hours (fastest expiration)
+  shelter: 24,      // Shelters: 24 hours
+  food: 12,         // Food sources: 12 hours
+  danger: 6,        // Danger zones: 6 hours
+  other: 24,        // Other: 24 hours
+};

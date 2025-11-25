@@ -156,41 +156,103 @@ export class OperationQueue {
         // Before creating a pin, ensure the map exists in PostgreSQL
         // This prevents foreign key constraint violations
         const mapId = operation.data.map_id;
-        const mapCheckResponse = await fetch(`http://localhost:3015/maps?id=eq.${mapId}&select=id`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-        
-        if (mapCheckResponse.ok) {
-          const maps = await mapCheckResponse.json();
-          if (maps.length === 0) {
-            // Map doesn't exist - this operation will fail, so return false
-            // The map should be created/synced first
-            console.warn(`⚠️ Map ${mapId} does not exist in PostgreSQL, pin operation will retry after map sync`);
-            return false;
+        try {
+          const mapCheckResponse = await fetch(`http://localhost:3015/maps?id=eq.${mapId}&select=id`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          
+          if (mapCheckResponse.ok) {
+            const maps = await mapCheckResponse.json();
+            if (maps.length === 0) {
+              // Map doesn't exist - this operation will fail, so return false
+              // The map should be created/synced first
+              console.warn(`⚠️ Map ${mapId} does not exist in PostgreSQL, pin operation will retry after map sync`);
+              return false;
+            }
           }
+        } catch (mapCheckError) {
+          // If we can't check, continue anyway - the pin creation will fail if map doesn't exist
+          console.warn('⚠️ Could not check if map exists, proceeding with pin creation:', mapCheckError);
         }
         
         // Map exists (or we couldn't check), try to create the pin
-        const response = await fetch('http://localhost:3015/pins', {
+        let response: Response;
+        try {
+          response = await fetch('http://localhost:3015/pins', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
             'Prefer': 'return=minimal'
           },
-          body: JSON.stringify(operation.data)
-        });
+                body: JSON.stringify(operation.data)
+          });
+        } catch (fetchError) {
+          console.error('❌ Network error during pin operation:', fetchError);
+          return false;
+        }
         
         if (!response.ok) {
-          const errorText = await response.text();
+          let errorText = await response.text();
+          let errorMessage = errorText;
+          
+          // Try to parse as JSON (PostgREST returns JSON errors)
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage = errorJson.message || errorText;
+          } catch {
+            // Not JSON, use as-is
+          }
+          
+          console.error(`❌ Pin operation failed (${response.status}):`, errorMessage);
+          console.error('📦 Data sent:', JSON.stringify(operation.data, null, 2));
+          
+          // Check if it's a column doesn't exist error (for backward compatibility)
+          // PostgREST error: "Could not find the 'expires_at' column of 'pins' in the schema cache"
+          const isColumnError = errorMessage.includes('column') && (
+            errorMessage.includes('does not exist') || 
+            errorMessage.includes('Could not find') ||
+            errorText.includes('PGRST204')
+          );
+          
+          if (isColumnError) {
+            console.warn(`⚠️ Column doesn't exist in PostgreSQL yet, retrying without Phase 3 fields...`);
+            // Try again without the new Phase 3 fields
+            if (operation.data.type || operation.data.expires_at) {
+              const fallbackData = { ...operation.data };
+              delete fallbackData.type;
+              delete fallbackData.expires_at;
+              console.log('🔄 Retrying pin operation without Phase 3 fields...');
+              
+              response = await fetch('http://localhost:3015/pins', {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify(fallbackData)
+              });
+              
+              if (response.ok) {
+                console.log('✅ Pin saved successfully after fallback');
+                return true;
+              }
+              // If fallback also fails, log the error
+              const fallbackErrorText = await response.text();
+              console.error(`❌ Fallback also failed (${response.status}):`, fallbackErrorText);
+            }
+          }
+          
           // Check if it's a foreign key constraint error
           if (errorText.includes('foreign key constraint') || errorText.includes('23503')) {
             console.warn(`⚠️ Foreign key constraint error for pin - map ${mapId} may not exist yet`);
             return false; // Will retry later
           }
+          
+          return false;
         }
         
-        return response.ok;
+        return true;
       }
       return false;
     } catch (error) {

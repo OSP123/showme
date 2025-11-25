@@ -270,4 +270,47 @@
     background: #ccc;
     cursor: not-allowed;
   }
+
+  /* Mobile optimizations */
+  @media (max-width: 480px) {
+    .create-map-container {
+      padding: 20px 16px;
+      max-width: calc(100vw - 32px);
+    }
+
+    .create-map-header h1 {
+      font-size: 24px;
+    }
+
+    .template-grid {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .template-card {
+      padding: 16px;
+    }
+
+    .template-icon {
+      font-size: 28px;
+    }
+
+    .template-name {
+      font-size: 16px;
+    }
+
+    .template-description {
+      font-size: 13px;
+    }
+
+    .input-group input[type="text"] {
+      padding: 12px;
+      font-size: 16px; /* Prevent zoom on iOS */
+    }
+
+    .create-btn {
+      padding: 14px;
+      font-size: 16px;
+    }
+  }
 </style>
