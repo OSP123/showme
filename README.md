@@ -4,12 +4,18 @@ Collaboratively pin locations on a map.
 
 ## Getting Started
 
+### Local Development
+
 1. **Start the stack**
 ```bash
 make up
 ```
 
 Application should run locally at `http://localhost:3012`
+
+### Deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for free hosting options including Railway, Render, and Fly.io.
 
 ## Simple By Design
 
