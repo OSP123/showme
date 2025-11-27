@@ -1,79 +1,10 @@
-# Deployment Guide
+# Deployment Guide - Free Hosting
 
-## Free Hosting Options
+## Actually Free Options
 
-### Option 1: Railway.app (Recommended - Easiest)
+### Option 1: Fly.io (Recommended - Truly Free)
 
-Railway supports Docker Compose and has a generous free tier.
-
-#### Steps:
-
-1. **Sign up at [railway.app](https://railway.app)** (free tier: $5/month credit)
-
-2. **Create a new project**:
-   - Click "New Project"
-   - Select "Deploy from GitHub repo" (or connect your Codeberg repo)
-   - Select your `showme` repository
-
-3. **Configure environment variables**:
-   - In Railway dashboard, go to your service → Variables
-   - Add these (Railway will auto-generate some):
-     ```
-     POSTGRES_USER=showme
-     POSTGRES_PASSWORD=<generate-strong-password>
-     POSTGRES_DB=showme
-     DATABASE_URL=postgresql://showme:<password>@db:5432/showme?sslmode=disable
-     PGRST_DB_URI=postgresql://showme:<password>@db:5432/showme
-     PGRST_DB_SCHEMAS=public
-     PGRST_DB_ANON_ROLE=showme
-     ELECTRIC_INSECURE=true
-     ```
-
-4. **Deploy**:
-   - Railway will detect `compose.yaml` and deploy all services
-   - It will expose ports automatically
-   - Get your public URL from the dashboard
-
-5. **Update frontend environment**:
-   - In Railway, find your `showme` service
-   - Add environment variable:
-     ```
-     VITE_ELECTRIC_SHAPE_URL=https://your-railway-url.up.railway.app/v1/shape
-     VITE_ELECTRIC_SOURCE_ID=dev-source-001
-     ```
-   - Rebuild the service
-
-**Note**: Railway free tier sleeps after inactivity. Consider upgrading to Hobby ($5/month) for always-on.
-
----
-
-### Option 2: Render.com
-
-Render has a free tier but services sleep after 15 minutes of inactivity.
-
-#### Steps:
-
-1. **Sign up at [render.com](https://render.com)**
-
-2. **Create a Blueprint** (for Docker Compose):
-   - New → Blueprint
-   - Connect your Git repository
-   - Render will detect `compose.yaml`
-
-3. **Configure services**:
-   - Render will create services for each container
-   - Set environment variables in each service
-   - Free tier: Services sleep after 15 min (slow first request)
-
-4. **Get public URLs**:
-   - Each service gets a `*.onrender.com` URL
-   - Update `VITE_ELECTRIC_SHAPE_URL` in frontend service
-
----
-
-### Option 3: Fly.io
-
-Fly.io has a generous free tier with 3 shared VMs.
+Fly.io offers a genuinely free tier with 3 shared VMs that stay running.
 
 #### Steps:
 
@@ -88,35 +19,74 @@ Fly.io has a generous free tier with 3 shared VMs.
    fly auth login
    ```
 
-3. **Create `fly.toml`** (for Docker Compose conversion):
-   - Fly.io doesn't directly support Docker Compose
-   - You'll need to convert services to Fly apps
-   - Or use `flyctl deploy` with a Dockerfile
-
-4. **Deploy**:
+3. **Deploy using Docker**:
    ```bash
-   fly launch  # Follow prompts
+   cd /path/to/showme
+   fly launch
+   ```
+   
+   Fly will:
+   - Detect your Docker setup
+   - Create a `fly.toml` config
+   - Deploy your services
+   - Provide public URLs
+
+4. **Configure environment variables**:
+   ```bash
+   fly secrets set POSTGRES_USER=showme
+   fly secrets set POSTGRES_PASSWORD=<generate-strong-password>
+   fly secrets set POSTGRES_DB=showme
+   fly secrets set ELECTRIC_INSECURE=true
+   # ... (see Environment Variables section below)
    ```
 
-**Note**: More complex setup, but good free tier.
+**Note**: Fly.io free tier includes 3 shared VMs that stay running. Perfect for small apps.
 
 ---
 
-### Option 4: Split Deployment (Frontend + Backend)
+### Option 2: Render.com (Free but Sleeps)
 
-Host frontend separately for better performance.
+Render has a free tier, but services sleep after 15 minutes of inactivity (slow first request after sleep).
 
-#### Frontend: Vercel/Netlify (Free)
+#### Steps:
 
-1. **Build the frontend**:
+1. **Sign up at [render.com](https://render.com)**
+
+2. **Option A: Use Render CLI**:
    ```bash
-   cd client
-   npm run build
+   npm install -g render-cli
+   render login
+   render deploy
    ```
 
+3. **Option B: GitHub Mirror + Web UI**:
+   - Push your Codeberg repo to GitHub (create a mirror)
+   - In Render dashboard: New → Blueprint
+   - Connect GitHub repository
+   - Render will detect `compose.yaml`
+
+4. **Configure services**:
+   - Render will create services for each container
+   - Set environment variables in each service
+   - Free tier: Services sleep after 15 min (slow first request)
+
+**Note**: Free but services sleep. First request after sleep takes 30-60 seconds.
+
+---
+
+### Option 3: Split Deployment (Best Performance)
+
+Host frontend on free static hosting, backend on free tier.
+
+#### Frontend: Vercel (Free, Always-On)
+
+1. **Push to GitHub** (Vercel supports GitHub):
+   - Create a GitHub repo (mirror your Codeberg repo)
+   - Push your code
+
 2. **Deploy to Vercel**:
-   - Sign up at [vercel.com](https://vercel.com)
-   - Import your Git repository
+   - Sign up at [vercel.com](https://vercel.com) (free)
+   - Import your GitHub repository
    - Set root directory to `client`
    - Build command: `npm run build`
    - Output directory: `dist`
@@ -126,27 +96,42 @@ Host frontend separately for better performance.
      VITE_ELECTRIC_SOURCE_ID=dev-source-001
      ```
 
-3. **Deploy backend to Railway/Render**:
-   - Deploy only the backend services (db, electric, postgres-bridge, nginx)
+3. **Backend: Fly.io or Render**:
+   - Deploy backend services (db, electric, postgres-bridge, nginx) to Fly.io
+   - Or use Render (but it will sleep)
    - Update frontend env vars to point to backend URL
+
+**Benefits**: 
+- Frontend always-on (Vercel free tier)
+- Backend on Fly.io free tier (always-on)
+- Best performance for free
 
 ---
 
-## Quick Start: Railway (Recommended)
+### Option 4: Self-Hosted (Completely Free)
 
-1. Go to [railway.app](https://railway.app)
-2. Sign up with GitHub/Codeberg
-3. New Project → Deploy from GitHub repo
-4. Select your `showme` repo
-5. Railway auto-detects `compose.yaml`
-6. Add environment variables (see above)
-7. Deploy!
+If you have a server or VPS:
 
-Railway will:
-- Build all Docker containers
-- Expose public URLs
-- Handle SSL automatically
-- Provide logs and monitoring
+1. **Install Docker and Docker Compose**:
+   ```bash
+   # On Ubuntu/Debian
+   curl -fsSL https://get.docker.com -o get-docker.sh
+   sh get-docker.sh
+   sudo apt-get install docker-compose-plugin
+   ```
+
+2. **Clone and deploy**:
+   ```bash
+   git clone <your-repo-url>
+   cd showme
+   docker compose up -d
+   ```
+
+3. **Set up reverse proxy** (nginx/Caddy):
+   - Point domain to your server
+   - Configure SSL with Let's Encrypt (free)
+
+**Cost**: $0 if you have existing server/VPS
 
 ---
 
@@ -173,26 +158,29 @@ VITE_ELECTRIC_SOURCE_ID=dev-source-001
 
 ---
 
-## Cost Comparison
+## Cost Comparison (Actually Free)
 
 | Service | Free Tier | Always-On | Best For |
 |---------|----------|-----------|----------|
-| Railway | $5/month credit | No (sleeps) | Easiest setup |
+| Fly.io | 3 shared VMs | Yes | Full-stack, always-on |
 | Render | Free | No (15min sleep) | Simple deployments |
-| Fly.io | 3 shared VMs | Yes | Always-on free tier |
 | Vercel | Free | Yes | Frontend only |
 | Netlify | Free | Yes | Frontend only |
+| Self-Hosted | $0 | Yes | If you have a server |
 
-**Recommendation**: Start with Railway for full-stack, or Vercel (frontend) + Railway (backend) for best performance.
+**Recommendation**: 
+- **Best free option**: Fly.io for full-stack (always-on, truly free)
+- **Best performance**: Vercel (frontend) + Fly.io (backend)
+- **If you have a server**: Self-hosted (completely free)
 
 ---
 
 ## Troubleshooting
 
-### Services sleeping:
-- Railway/Render free tiers sleep after inactivity
+### Services sleeping (Render):
+- Render free tier sleeps after 15 minutes
 - First request after sleep takes 30-60 seconds
-- Upgrade to paid tier for always-on
+- Use Fly.io if you need always-on
 
 ### CORS issues:
 - Make sure `PGRST_OPENAPI_SERVER_PROXY_URI` matches your frontend domain
@@ -200,9 +188,15 @@ VITE_ELECTRIC_SOURCE_ID=dev-source-001
 
 ### Database connection:
 - Ensure `DATABASE_URL` uses internal service names (e.g., `db:5432`)
-- Railway/Render provide internal networking
+- Fly.io/Render provide internal networking
 
 ### ElectricSQL sync:
 - Verify `VITE_ELECTRIC_SHAPE_URL` points to nginx service (port 3013)
 - Check ElectricSQL logs for connection issues
 
+### Codeberg deployment:
+- Most platforms don't support Codeberg directly
+- Options:
+  1. Use CLI tools (Fly.io CLI, Render CLI)
+  2. Mirror to GitHub (push to both)
+  3. Self-host
