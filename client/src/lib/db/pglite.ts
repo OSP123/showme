@@ -36,7 +36,7 @@ export function initLocalDb(): Promise<PGlite> {
       dataDir: 'idb://showmedb',
       extensions: { electric: electricSync() },
     });
-    
+
     // Add error handler to catch duplicate key errors during ElectricSQL sync
     // These can occur when ElectricSQL tries to sync data that already exists locally
     const originalQuery = pdb.query.bind(pdb);
@@ -142,18 +142,22 @@ export function initLocalDb(): Promise<PGlite> {
 
     console.log('🔄 Setting up maps sync with params:', syncParams);
 
-    try {
-      await pdb.electric.syncShapeToTable({
-        shape: { 
-          url: SHAPE_URL, 
-          params: syncParams 
-        },
-        table: 'maps',
-        primaryKey: ['id'],
-        shapeKey: 'maps',
-        initialInsertMethod: 'json'
-      });
-      console.log('✅ Maps sync configured - pins will sync per-map in PinLayer component');
+    // Don't setup ElectricSQL sync if panic wipe is active
+    if ((window as any).__panicWipeActive || localStorage.getItem('__panicWipeActive') === 'true') {
+      console.log('⏸️ Skipping ElectricSQL sync setup - panic wipe is active');
+    } else {
+      try {
+        await pdb.electric.syncShapeToTable({
+          shape: { 
+            url: SHAPE_URL, 
+            params: syncParams 
+          },
+          table: 'maps',
+          primaryKey: ['id'],
+          shapeKey: 'maps',
+          initialInsertMethod: 'json'
+        });
+        console.log('✅ Maps sync configured - pins will sync per-map in PinLayer component');
     } catch (error: any) {
       const errorMsg = error?.message || String(error);
       const statusCode = error?.status || error?.response?.status;
@@ -167,6 +171,7 @@ export function initLocalDb(): Promise<PGlite> {
         // For other errors, log but don't fail initialization
         console.warn('⚠️ ElectricSQL sync setup failed (non-critical):', errorMsg);
         console.warn('   App will continue in offline mode. Sync will be retried automatically.');
+      }
       }
     }
 
@@ -186,6 +191,11 @@ export function initLocalDb(): Promise<PGlite> {
     
     // Listen for changes to pins table  
     pdb.listen('pins', (data: any) => {
+      // Don't dispatch events if panic wipe is active
+      if ((window as any).__panicWipeActive) {
+        console.debug('⏸️ Pins table change ignored - panic wipe active');
+        return;
+      }
       console.log('📡 Pins table change detected:', data);
       // Dispatch custom event for components to react to
       if (typeof window !== 'undefined') {

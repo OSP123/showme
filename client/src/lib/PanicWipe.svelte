@@ -1,9 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { panicWipe, canPerformPanicWipe } from './panicWipe';
-  import type { PGliteWithSync } from '@electric-sql/pglite-sync';
+  import type { PGlite } from '@electric-sql/pglite';
 
-  export let db: PGliteWithSync | undefined;
+  export let db: PGlite | any | undefined;
   export let open = false;
 
   const dispatch = createEventDispatcher<{
@@ -15,7 +15,7 @@
   let confirmText = '';
   const requiredText = 'DELETE ALL';
 
-  function handleWipe() {
+  async function handleWipe() {
     if (confirmText !== requiredText) {
       return;
     }
@@ -26,26 +26,29 @@
     }
 
     if (!db) {
-      alert('Database not available');
+      console.error('❌ Database not available for panic wipe');
+      alert('Database not available. Please refresh the page and try again.');
       return;
     }
 
     isWiping = true;
-    panicWipe(db)
-      .then(() => {
-        dispatch('wiped');
-        open = false;
-        confirmText = '';
-        // Reload page to reset app state
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      })
-      .catch((error) => {
-        console.error('Panic wipe failed:', error);
-        alert('Failed to wipe data. Please try again.');
-        isWiping = false;
-      });
+    try {
+      console.log('🚨 Starting panic wipe...');
+      await panicWipe(db);
+      console.log('✅ Panic wipe completed successfully');
+      dispatch('wiped');
+      open = false;
+      confirmText = '';
+      // Give UI time to update, then reload page to reset app state
+      setTimeout(() => {
+        console.log('🔄 Reloading page after panic wipe...');
+        window.location.reload();
+      }, 500);
+    } catch (error) {
+      console.error('❌ Panic wipe failed:', error);
+      alert(`Failed to wipe data: ${error instanceof Error ? error.message : String(error)}. Please try again.`);
+      isWiping = false;
+    }
   }
 
   function cancel() {

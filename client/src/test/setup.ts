@@ -13,13 +13,23 @@ afterEach(() => {
 // Mock global fetch
 global.fetch = vi.fn();
 
-// Mock crypto.randomUUID
+// Mock crypto.randomUUID and preserve crypto.subtle for Web Crypto API
+// Node.js has Web Crypto API available via crypto.webcrypto
+import { webcrypto } from 'node:crypto';
+
+const realCrypto = global.crypto || webcrypto;
 Object.defineProperty(global, 'crypto', {
   value: {
+    ...realCrypto,
     randomUUID: () => {
       return 'test-uuid-' + Math.random().toString(36).substring(2, 15);
     },
+    // Use real Web Crypto API from Node.js
+    subtle: webcrypto.subtle,
+    getRandomValues: webcrypto.getRandomValues.bind(webcrypto),
   },
+  writable: true,
+  configurable: true,
 });
 
 // Mock window.matchMedia

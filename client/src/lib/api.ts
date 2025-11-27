@@ -1,10 +1,12 @@
 // src/lib/api.ts
 import type { PGliteWithSync } from '@electric-sql/pglite-sync';
-import type { PinRow, PinData } from './models';
+import type { PinRow, PinData, MapRow } from './models';
 import { PIN_TTL_HOURS } from './models';
 import { initLocalDb }        from './db/pglite';
 import { operationQueue }     from './operationQueue';
 import { fuzzCoordinates }    from './fuzzing';
+import { getEncryptionKey }   from './db/keyManager';
+import { encryptPinRow, decryptPinRow, encryptMapRow, decryptMapRow, decryptPinRows, decryptMapRows } from './db/fieldEncryption';
 
 // Check if a map exists in PostgreSQL
 async function ensureMapExistsInPostgres(db: PGliteWithSync, mapId: string): Promise<boolean> {
@@ -16,7 +18,8 @@ async function ensureMapExistsInPostgres(db: PGliteWithSync, mapId: string): Pro
     );
     
     if (localResult.rows.length === 0) {
-      console.warn(`⚠️ Map ${mapId} does not exist locally`);
+      console.warn(`⚠️ Map ${mapId} does not exist locally - cannot create pin without a map`);
+      // Don't reload here - let the caller handle it
       return false;
     }
 
@@ -117,6 +120,14 @@ export async function createMap(
     
     if (success) {
       console.log('✅ Map saved to PostgreSQL - will sync via ElectricSQL');
+      
+      // Clear panic wipe flag when user creates a new map (they're using the app again)
+      // This allows polling to resume for the new map
+      if (typeof window !== 'undefined' && localStorage.getItem('__panicWipeActive') === 'true') {
+        localStorage.removeItem('__panicWipeActive');
+        (window as any).__panicWipeActive = false;
+        console.log('✅ Panic wipe flag cleared - user created new map, polling will resume');
+      }
     } else {
       console.warn('⚠️ Failed to save map to PostgreSQL, queueing for retry...');
       // Queue for retry when online
@@ -140,18 +151,32 @@ export async function createMap(
     });
   }
 
-  // EXISTING: Save to local database (preserved exactly)
+  // EXISTING: Save to local database (with encryption if enabled)
+  const encryptionKey = await getEncryptionKey();
+  let finalName = name;
+  let finalAccessToken = access_token;
+  
+  if (encryptionKey) {
+    // Encrypt sensitive fields before storing
+    const encrypted = await encryptMapRow({ name, access_token }, encryptionKey);
+    finalName = encrypted.name || name;
+    finalAccessToken = encrypted.access_token || access_token;
+  }
+  
   await db.query(
     `INSERT INTO maps (id,name,is_private,access_token,created_at)
      VALUES ($1,$2,$3,$4,$5)`,
     [
       id,
-      name,
+      finalName,
       is_private ? 'true' : 'false',
-      access_token,
+      finalAccessToken,
       now
     ]
   );
+  
+  // NOTE: We do NOT clear the panic wipe flag here
+  // The flag prevents fetching OLD pins from PostgREST, but allows NEW maps to be created locally
 
   // EXISTING: Manually trigger sync for maps (preserved exactly)
   try {
@@ -185,19 +210,24 @@ export async function getPins(
     
     const params = includeExpired ? [mapId] : [mapId, now];
     const res = await db.query(query, params);
-    return res.rows;
+    
+    // Decrypt pins if encryption is enabled
+    const encryptionKey = await getEncryptionKey();
+    return await decryptPinRows(res.rows, encryptionKey);
   } catch (error: any) {
     // If expires_at column doesn't exist, fall back to simple query
     const errorMsg = error?.message || String(error);
     if (errorMsg.includes('expires_at') || errorMsg.includes('does not exist')) {
-      const res = await db.query(
+  const res = await db.query(
         `SELECT * FROM pins WHERE map_id = $1 ORDER BY created_at DESC`,
-        [mapId]
-      );
-      return res.rows;
+    [mapId]
+  );
+      // Decrypt pins if encryption is enabled
+      const encryptionKey = await getEncryptionKey();
+      return await decryptPinRows(res.rows, encryptionKey);
     }
     throw error;
-  }
+}
 }
 
 import type { PinData } from './models';
@@ -243,7 +273,7 @@ export async function addPin(
       const map = mapResult.rows[0];
       const fuzzingEnabled = map.fuzzing_enabled === 'true' || map.fuzzing_enabled === true;
       const fuzzingRadius = map.fuzzing_radius || 100;
-      
+    
       if (fuzzingEnabled) {
         const fuzzed = fuzzCoordinates(data.lat, data.lng, fuzzingRadius);
         finalLat = fuzzed.lat;
@@ -255,7 +285,24 @@ export async function addPin(
     console.warn('⚠️ Could not check fuzzing settings, using original coordinates:', error);
   }
 
-  // Save to local database first (offline-first)
+  // Save to local database first (offline-first, with encryption if enabled)
+  const encryptionKey = await getEncryptionKey();
+  let finalDescription = data.description || null;
+  let finalTags = tagsJson;
+  let finalPhotoUrls = photoUrlsJson;
+  
+  if (encryptionKey) {
+    // Encrypt sensitive fields before storing
+    const encrypted = await encryptPinRow({
+      description: data.description || null,
+      tags: tagsJson,
+      photo_urls: photoUrlsJson
+    }, encryptionKey);
+    finalDescription = encrypted.description || finalDescription;
+    finalTags = encrypted.tags || finalTags;
+    finalPhotoUrls = encrypted.photo_urls || finalPhotoUrls;
+  }
+  
   await db.query(
     `INSERT INTO pins
       (id,map_id,lat,lng,type,tags,description,photo_urls,expires_at,created_at,updated_at)
@@ -267,14 +314,18 @@ export async function addPin(
       finalLat,
       finalLng,
       data.type || null,
-      tagsJson,
-      data.description || null,
-      photoUrlsJson,
+      finalTags,
+      finalDescription,
+      finalPhotoUrls,
       expiresAt,
       now,
       now
     ]
   );
+  
+  // NOTE: We do NOT clear the panic wipe flag here
+  // The flag prevents fetching OLD pins from PostgREST, but allows NEW pins to be created locally
+  // This way, deleted pins stay deleted, but new pins work normally
 
   // Write to PostgREST so pin appears on server for other clients
   // PostgREST expects TEXT[] arrays as JSON arrays (not strings)
@@ -301,8 +352,26 @@ export async function addPin(
       postgresData.expires_at = expiresAt;
     }
     
+    // Ensure map exists in PostgREST before saving pin (fixes foreign key errors after panic wipe)
+    const mapExists = await ensureMapExistsInPostgres(db, data.map_id);
+    if (!mapExists) {
+      console.warn('⚠️ Map does not exist in PostgreSQL, queueing pin for retry after map sync...');
+      const queuedData: any = {
+        id,
+        map_id: data.map_id,
+        lat: finalLat,
+        lng: finalLng,
+        description: data.description || null,
+        created_at: now,
+        updated_at: now,
+        tags: tagsArray.length > 0 ? tagsArray : [],
+        photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
+      };
+      await operationQueue.enqueue('addPin', queuedData);
+      return { id };
+    }
+    
     // Try to save directly - saveToPostgres handles column errors with fallback
-    // If map doesn't exist, we'll get a foreign key error and queue it
     const success = await saveToPostgres('pins', postgresData);
     
     if (success) {
@@ -344,7 +413,7 @@ export async function addPin(
         postgresData.expires_at = expiresAt;
       }
       await operationQueue.enqueue('addPin', postgresData);
-    } else {
+        } else {
       console.warn('⚠️ Failed to save pin to PostgreSQL, queueing for retry:', error);
       const postgresData: any = {
         id,
@@ -368,4 +437,51 @@ export async function addPin(
   }
 
   return { id };
+}
+
+/**
+ * Get a map by ID with decryption if enabled
+ */
+export async function getMap(
+  db: PGliteWithSync,
+  mapId: string
+): Promise<MapRow | null> {
+  try {
+    const result = await db.query(
+      `SELECT * FROM maps WHERE id = $1`,
+      [mapId]
+    );
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    // Decrypt map if encryption is enabled
+    const encryptionKey = await getEncryptionKey();
+    const decrypted = await decryptMapRow(result.rows[0] as MapRow, encryptionKey);
+    return decrypted;
+  } catch (error) {
+    console.error('Failed to get map:', error);
+    return null;
+  }
+}
+
+/**
+ * Get all maps with decryption if enabled
+ */
+export async function getAllMaps(
+  db: PGliteWithSync
+): Promise<MapRow[]> {
+  try {
+    const result = await db.query(
+      `SELECT * FROM maps ORDER BY created_at DESC`
+    );
+    
+    // Decrypt maps if encryption is enabled
+    const encryptionKey = await getEncryptionKey();
+    return await decryptMapRows(result.rows as MapRow[], encryptionKey);
+  } catch (error) {
+    console.error('Failed to get maps:', error);
+    return [];
+  }
 }

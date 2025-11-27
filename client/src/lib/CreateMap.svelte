@@ -94,23 +94,23 @@
   <div class="map-details">
     <div class="input-group">
       <label for="map-name">Map Name</label>
-      <input
+  <input
         id="map-name"
-        type="text"
+    type="text"
         placeholder="Enter map name"
-        bind:value={name}
-        disabled={disabled}
-      />
+    bind:value={name}
+    disabled={disabled}
+  />
     </div>
     
     <label class="checkbox-label">
-      <input
-        type="checkbox"
-        bind:checked={isPrivate}
-        disabled={disabled}
-      />
+    <input
+      type="checkbox"
+      bind:checked={isPrivate}
+      disabled={disabled}
+    />
       <span>Make this map private (requires access token)</span>
-    </label>
+  </label>
   </div>
 
   <button 

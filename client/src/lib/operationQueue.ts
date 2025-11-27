@@ -79,6 +79,13 @@ export class OperationQueue {
   }
 
   async processQueue() {
+    // Don't process queue if panic wipe is active (check both window flag and localStorage)
+    const panicWipeActive = (window as any).__panicWipeActive || localStorage.getItem('__panicWipeActive') === 'true';
+    if (panicWipeActive) {
+      console.debug('⏸️ Operation queue processing disabled - panic wipe active');
+      return;
+    }
+    
     if (this.processing || this.queue.length === 0 || !navigator.onLine) {
       return;
     }
@@ -89,6 +96,14 @@ export class OperationQueue {
     const operationsToProcess = [...this.queue];
     
     for (const operation of operationsToProcess) {
+      // Check panic wipe flag before each operation (check both window flag and localStorage)
+      const panicWipeActive = (window as any).__panicWipeActive || localStorage.getItem('__panicWipeActive') === 'true';
+      if (panicWipeActive) {
+        console.debug('⏸️ Operation queue processing stopped - panic wipe active');
+        this.processing = false;
+        return;
+      }
+      
       try {
         const success = await this.executeOperation(operation);
         
@@ -141,6 +156,13 @@ export class OperationQueue {
   }
 
   private async executeOperation(operation: QueuedOperation): Promise<boolean> {
+    // Don't execute operations if panic wipe is active (check both window flag and localStorage)
+    const panicWipeActive = (window as any).__panicWipeActive || localStorage.getItem('__panicWipeActive') === 'true';
+    if (panicWipeActive) {
+      console.debug('⏸️ Operation execution skipped - panic wipe active');
+      return false;
+    }
+    
     try {
       if (operation.type === 'createMap') {
         const response = await fetch('http://localhost:3015/maps', {
@@ -273,4 +295,9 @@ export class OperationQueue {
 }
 
 export const operationQueue = new OperationQueue();
+
+// Make operation queue accessible globally for panic wipe
+if (typeof window !== 'undefined') {
+  (window as any).operationQueue = operationQueue;
+}
 

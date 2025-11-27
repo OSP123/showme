@@ -72,3 +72,21 @@
   - `Follow-ups:`
     - `...` (bullet list of outstanding items or `None`)
 - Separate entries with a blank line for readability.
+
+
+# Test-First Development
+
+- **ALWAYS create tests for new functionality before or alongside implementation.**
+- **NEVER commit code until all tests are passing.**
+- When adding new features:
+  1. Write tests first (or alongside implementation)
+  2. Implement the feature
+  3. Run tests to ensure they pass
+  4. Fix any failing tests
+  5. Only then commit the changes
+- Test coverage should include:
+  - Unit tests for individual functions/components
+  - Integration tests for API routes and workflows
+  - Component tests for UI interactions
+  - Edge cases and error handling
+- If tests fail, fix them before committing. Do not commit broken tests.

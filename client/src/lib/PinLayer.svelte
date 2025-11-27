@@ -4,6 +4,7 @@
   import type { Map as GLMap } from 'maplibre-gl';
   import type { PinRow } from '$lib/models';
   import { initLocalDb } from '$lib/db/pglite';
+  import { getPins } from '$lib/api';
   import { getPinColor, getPinEmoji, getTimeAgo } from '$lib/pinUtils';
   import Supercluster from 'supercluster';
 
@@ -13,6 +14,15 @@
   
   // Set up global error handler for unhandled promise rejections from ElectricSQL
   onMount(() => {
+    // Initialize panic wipe flag from localStorage (persists across reloads)
+    const storedFlag = localStorage.getItem('__panicWipeActive');
+    if (storedFlag === 'true') {
+      (window as any).__panicWipeActive = true;
+      console.log('🚨 Panic wipe flag detected from previous session - polling disabled');
+    } else if ((window as any).__panicWipeActive === undefined) {
+      (window as any).__panicWipeActive = false;
+    }
+    
     const handler = (event: PromiseRejectionEvent) => {
       const errorMsg = event.reason?.message || String(event.reason);
       // Ignore duplicate key errors from ElectricSQL sync - these are expected
@@ -25,8 +35,37 @@
     
     window.addEventListener('unhandledrejection', handler);
     
+    // Listen for panic wipe events to stop polling and clear pins
+    const panicWipeHandler = () => {
+      console.log('🔄 Panic wipe detected, stopping polling and clearing pins...');
+      
+      // Set window-level flag FIRST - accessible from any closure
+      (window as any).__panicWipeActive = true;
+      
+      // Clear the polling interval IMMEDIATELY
+      if (pollInterval !== null) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+        console.log('✅ Polling interval cleared immediately');
+      }
+      
+      // Clear all markers immediately
+      markers.forEach(m => m.remove());
+      clusters.forEach(c => c.remove());
+      markers = [];
+      clusters = [];
+      
+      // Also call unsubscribe to clean up map event listeners
+      if (unsubscribe) {
+        unsubscribe();
+        unsubscribe = undefined;
+      }
+    };
+    window.addEventListener('panic-wipe-complete', panicWipeHandler);
+    
     return () => {
       window.removeEventListener('unhandledrejection', handler);
+      window.removeEventListener('panic-wipe-complete', panicWipeHandler);
     };
   });
 
@@ -36,21 +75,28 @@
   let currentMapId = '';
   let clusterIndex: Supercluster | null = null;
   let useClustering = true; // Enable clustering by default
+  let pollInterval: ReturnType<typeof setInterval> | null = null; // Store interval reference for immediate clearing
 
+  // Helper function to check if panic wipe is active (checks both window flag and localStorage)
+  function isPanicWipeActive(): boolean {
+    return (window as any).__panicWipeActive || localStorage.getItem('__panicWipeActive') === 'true';
+  }
 
   async function drawPins() {
     if (!map) return;
     
+    // NOTE: We DO draw pins even if panic wipe is active
+    // The flag only prevents fetching from PostgREST, not displaying local pins
+    // This allows newly created pins to be displayed
+    
     const db = await initLocalDb();
-    const res = await db.query(
-      `SELECT * FROM pins WHERE map_id=$1 ORDER BY created_at`, 
-      [mapId]
-    );
+    // Use getPins API function which handles decryption automatically
+    const pins = await getPins(db, mapId, true); // includeExpired = true for drawing
     
     // Filter pins by type if filter is active
-    let filteredPins = res.rows;
+    let filteredPins = pins;
     if (filterTypes.length > 0) {
-      filteredPins = res.rows.filter((pin) => {
+      filteredPins = pins.filter((pin) => {
         try {
           const tags = pin.tags ? JSON.parse(pin.tags) : [];
           if (Array.isArray(tags) && tags.length > 0) {
@@ -65,7 +111,7 @@
       });
     }
     
-    console.log(`🔍 Drawing pins for map ${mapId}: ${filteredPins.length} of ${res.rows.length} pins (filtered)`);
+    console.log(`🔍 Drawing pins for map ${mapId}: ${filteredPins.length} of ${pins.length} pins (filtered)`);
     
     // Remove old markers and clusters
     markers.forEach(m => m.remove());
@@ -248,10 +294,28 @@
       
       marker.setPopup(popup);
       
+      // Handle marker clicks - open popup and prevent map click
+      el.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent event from reaching map
+        // Toggle popup (MapLibre's default behavior, but we ensure it happens)
+        if (!popup.isOpen()) {
+          marker.togglePopup();
+        }
+      });
+      
       return marker;
   }
 
   async function setupSync() {
+    // Check panic wipe flag - if set, skip polling but still draw local pins
+    const panicWipeActive = isPanicWipeActive();
+    if (panicWipeActive) {
+      console.log('⏸️ Skipping polling setup - panic wipe is active');
+      // Still draw pins once from local DB
+      await drawPins();
+      return;
+    }
+    
     try {
       await drawPins(); // initial draw
       
@@ -265,27 +329,75 @@
       
       // Poll function that checks both local and server
       const pollForUpdates = async () => {
+        // Check panic wipe flag FIRST - if set, stop polling completely
+        if (isPanicWipeActive()) {
+          console.debug('⏸️ Polling stopped - panic wipe is active');
+          // Clear the interval if flag is set
+          if (pollInterval !== null) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
+          return;
+        }
+        
         try {
           // Check local database
           await drawPins();
+          
+          // Check again after async operation (panic wipe might have happened)
+          if (isPanicWipeActive()) {
+            console.debug('⏸️ Polling disabled during drawPins - aborting');
+            return;
+          }
           
           // Also fetch from PostgREST to get pins from other clients
           try {
             const response = await fetch(
               `http://localhost:3015/pins?map_id=eq.${mapId}&select=*&order=created_at.desc`
             );
+            
+            // Check again after fetch (panic wipe might have happened)
+            if (isPanicWipeActive()) {
+              console.debug('⏸️ Polling disabled during fetch - aborting');
+              return;
+            }
+            
             if (response.ok) {
               const serverPins = await response.json();
               
               // Convert server pins (TEXT[] arrays) to local format and insert
               for (const serverPin of serverPins) {
+                // Check flag before each insert (panic wipe might have happened)
+                if (isPanicWipeActive()) {
+                  console.debug('⏸️ Polling disabled during pin insertion - aborting');
+                  return;
+                }
+                
+                // CRITICAL: Check flag BEFORE querying DB (panic wipe might have happened)
+                if (isPanicWipeActive()) {
+                  console.debug('⏸️ Panic wipe active - aborting pin processing');
+                  return;
+                }
+                
                 // Check if pin already exists locally
                 const existing = await db.query(
                   `SELECT id FROM pins WHERE id = $1`,
                   [serverPin.id]
                 );
                 
+                // Check flag again after query (panic wipe might have happened during query)
+                if (isPanicWipeActive()) {
+                  console.debug('⏸️ Panic wipe active after query - aborting');
+                  return;
+                }
+                
                 if (existing.rows.length === 0) {
+                  // CRITICAL: Check flag again right before inserting (panic wipe might have happened)
+                  if (isPanicWipeActive()) {
+                    console.debug('⏸️ Panic wipe active - aborting pin insertion');
+                    return;
+                  }
+                  
                   // Convert arrays to JSON strings
                   const tagsJson = Array.isArray(serverPin.tags) 
                     ? JSON.stringify(serverPin.tags) 
@@ -340,8 +452,11 @@
                     }
                   }
                   
-                  // Redraw to show new pin
-                  await drawPins();
+                  // Check flag again before redrawing (panic wipe might have happened during insert)
+                  if (!isPanicWipeActive()) {
+                    // Redraw to show new pin
+                    await drawPins();
+                  }
                 }
               }
             }
@@ -354,18 +469,22 @@
         }
       };
       
-      // Poll every 2 seconds
-      const pollInterval = setInterval(pollForUpdates, 2000);
+      // Poll every 2 seconds - store interval reference for immediate clearing
+      pollInterval = setInterval(pollForUpdates, 2000);
       
       // Redraw pins when map moves/zooms (for clustering)
       const onMoveEnd = () => {
+        // Always redraw - flag only prevents PostgREST polling, not local display
         drawPins();
       };
       map.on('moveend', onMoveEnd);
       map.on('zoomend', onMoveEnd);
       
       unsubscribe = () => {
-        clearInterval(pollInterval);
+        if (pollInterval !== null) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
         map.off('moveend', onMoveEnd);
         map.off('zoomend', onMoveEnd);
       };
@@ -375,19 +494,25 @@
     }
   }
 
-  // Reactive: setup when map or mapId changes
-  $: if (map && mapId && mapId !== currentMapId) {
-    // Clean up previous subscription
-    if (unsubscribe) {
-      unsubscribe();
-      unsubscribe = undefined;
-    }
+  // Reactive: setup when map or mapId changes, or when panic wipe flag is cleared
+  $: if (map && mapId) {
+    // Check if we need to setup sync (either new mapId or flag was cleared and polling isn't running)
+    const shouldSetup = mapId !== currentMapId || (pollInterval === null && !isPanicWipeActive());
     
-    currentMapId = mapId;
-    setupSync();
+    if (shouldSetup) {
+      // Clean up previous subscription
+      if (unsubscribe) {
+        unsubscribe();
+        unsubscribe = undefined;
+      }
+      
+      currentMapId = mapId;
+      setupSync();
+    }
   }
 
   // Reactive: redraw pins when filter changes
+  // NOTE: We redraw even if panic wipe is active - flag only prevents PostgREST polling
   $: if (map && mapId) {
     drawPins();
   }
