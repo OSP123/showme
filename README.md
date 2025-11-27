@@ -1,86 +1,214 @@
 # ShowMe
 
-Collaboratively pin locations on a map.
+Collaboratively pin locations on a map. Built for crisis response, community mapping, and real-time location sharing.
+
+## Features
+
+### Core Functionality
+- **Real-time Collaborative Mapping**: Multiple users can add pins simultaneously with live updates
+- **Offline-First**: Works offline with automatic sync when connection is restored
+- **No Sign-In Required**: Anonymous, link-based sharing
+- **Private Maps**: Optional access tokens for sensitive data
+- **Mobile-Optimized**: Responsive design with large touch targets for mobile devices
+
+### Pin Management
+- **Quick Pin Presets**: One-tap pin creation for common types (Medical, Water, Checkpoint, Shelter, Food, Danger)
+- **Detailed Pins**: Full pin creation with tags, descriptions, and photo URLs
+- **Pin Filtering**: Filter pins by type to focus on specific resources
+- **Pin Clustering**: Automatic clustering for large datasets (10+ pins)
+- **Pin TTL (Time-To-Live)**: Auto-expiration based on pin type:
+  - Medical: 24h
+  - Water: 12h
+  - Checkpoint: 2h
+  - Shelter: 24h
+  - Food: 12h
+  - Danger: 6h
+  - Other: 24h
+
+### Security & Privacy
+- **Encrypted Local Database**: AES-GCM encryption for sensitive data stored locally
+- **Field-Level Encryption**: Encrypts pin descriptions, tags, photo URLs, and map names
+- **Location Fuzzing**: Optional coordinate obfuscation to protect exact locations (configurable per map)
+- **Panic Wipe**: Emergency data deletion that removes all local and remote data
+
+### User Experience
+- **Map Templates**: Quick map creation with templates (Custom, Crisis Response, Community, Event, Private)
+- **Share Maps**: Generate shareable links with optional access tokens
+- **Sync Status**: Real-time sync status indicator with operation queue visibility
+- **Pin Popups**: Rich pin details with timestamps, type labels, and descriptions
+- **New Map Button**: Easy navigation to create additional maps
 
 ## Getting Started
 
 ### Local Development
 
-1. **Start the stack**
+**Prerequisites:**
+- Docker and Docker Compose
+- Node.js 22+ (for local development)
+
+**Start the stack:**
 ```bash
 make up
 ```
 
-Application should run locally at `http://localhost:3012`
+Application runs at `http://localhost:3012`
+
+**Other commands:**
+```bash
+make down      # Stop all services
+make logs      # View logs
+make ps        # Check service status
+```
 
 ### Deployment
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for free hosting options including Railway, Render, and Fly.io.
 
-## Simple By Design
+## Architecture
 
-Creating a project:
-- Users create a group / map for a specific purpose.
-- Users share a link to the map with their community.
-- Sign in is not required, data is anonymous.
-- Each 'map' is unique to a group, with no information sharing
-  across maps.
-- In future, maps could be optionally made private, for sensitive data
-  (I'm sure users will request this).
+### Technology Stack
 
-Sharing locations:
-- A pin can be placed, or users geolocation used.
-- User adds optional tags and a description of what is there.
-- It would probably be useful to allow adding photos too.
+**Frontend:**
+- Svelte 4 with TypeScript
+- MapLibre GL JS for map rendering
+- PGLite (local PostgreSQL in browser)
+- ElectricSQL for real-time sync
+- Vite for build tooling
 
-Browsing the map:
-- Users see locations being added in real-time.
-- The tag / icon might be enough information they need.
-- Clicking the map icon opens up further details from the user that posted.
+**Backend:**
+- PostgreSQL with PostGIS
+- ElectricSQL sync server
+- PostgREST (HTTP API for PostgreSQL)
+- Nginx (reverse proxy)
+
+**Infrastructure:**
+- Docker Compose for local development
+- All services containerized
 
 ### How It Works
 
-A web app (easy access, lightweight), with two core components:
-- Postgres database on server.
-- Map client with PGLite (local Postgres), likely built in TS Svelte.
+1. **Local Database**: Each client runs PGLite (PostgreSQL in the browser) for offline-first operation
+2. **Sync Engine**: ElectricSQL syncs maps between server and clients in real-time
+3. **Pin Sync**: PostgREST API handles pin writes with polling fallback for real-time updates
+4. **Offline Support**: Operation queue retries failed operations when connection is restored
+5. **Encryption**: Sensitive data is encrypted at rest in IndexedDB using Web Crypto API
 
-Sync engine:
-- Using `electric-sql` as a sync layer, data is synced between the
-  central Postgres server and users PGLite instance.
-- Users receive real-time updates as locations are added.
+### Data Flow
 
-Offline:
-- As data is stored in local PGLite and synced when online, data
-  can be read / written while offline.
+```
+User Action → Local PGLite → PostgREST API → PostgreSQL
+                ↓
+         ElectricSQL Sync
+                ↓
+         Other Clients (Real-time)
+```
 
-Web map:
-- MapLibre points, with clustering if required on large projects.
+## Project Structure
 
-### Notifications
+```
+showme/
+├── client/                 # Frontend Svelte application
+│   ├── src/
+│   │   ├── lib/           # Core components and utilities
+│   │   │   ├── db/        # Database and encryption
+│   │   │   ├── *.svelte   # UI components
+│   │   │   └── *.ts       # Utilities and API
+│   │   └── main.ts
+│   └── package.json
+├── migrations/            # Database schema migrations
+├── compose.yaml           # Docker Compose configuration
+├── Dockerfile             # Frontend build container
+└── README.md
+```
 
-- An extra value add, to come later.
-- Users can add an email address, signal username, telegram username, etc.
-- They can be notified of new events, based on filters, to whatever service
-  they specific.
+## Testing
 
-#### Email
+Comprehensive test suite with Vitest:
 
-- Simple, SMTP server, send to user.
+```bash
+cd client
+npm test              # Run tests in watch mode
+npm run test:run      # Run tests once
+npm run test:ui       # Run tests with UI
+npm run test:coverage # Generate coverage report
+```
 
-#### Signal
+**Test Coverage:**
+- API functions (createMap, addPin, getPins)
+- Database operations (PGLite initialization, sync setup)
+- Encryption utilities (key management, field encryption)
+- Operation queue (retry logic, persistence)
+- Pin utilities (colors, emojis, time formatting)
+- Panic wipe functionality
+- Expired pins cleanup
+- Fuzzing utilities
 
-- https://github.com/bbernhard/signal-cli-rest-api
-- Send a message directly to user via Signal protocol.
+## Security Features
 
-#### Telegram
+### Encryption
 
-- Has a 'Bot API': https://core.telegram.org/bots/api for sending
-  messages.
+- **AES-GCM 256-bit encryption** for sensitive fields
+- **Key Management**: Auto-generated or passphrase-derived keys
+- **Field-Level Encryption**: Encrypts descriptions, tags, photo URLs, map names
+- **Backward Compatible**: Works with unencrypted data
 
-#### SMS
+See [ENCRYPTION_TESTING.md](./ENCRYPTION_TESTING.md) for testing encryption.
 
-- Probably more complex, but may consider it.
+### Privacy
 
-#### Other?
+- **Location Fuzzing**: Obfuscate exact coordinates (configurable radius)
+- **Panic Wipe**: Emergency deletion of all local and remote data
+- **No User Accounts**: Anonymous, link-based access
+- **Private Maps**: Optional access tokens for sensitive maps
 
-- Other methods as requested.
+## Development
+
+### Adding New Features
+
+1. **Write Tests First**: Follow test-first development approach
+2. **Update Schema**: Add migrations in `migrations/` directory
+3. **Update Types**: Modify `client/src/lib/models.ts`
+4. **Implement Feature**: Add components/utilities in `client/src/lib/`
+5. **Run Tests**: Ensure all tests pass
+6. **Test Locally**: Verify with `make up`
+
+### Code Style
+
+- TypeScript strict mode
+- Svelte components with TypeScript
+- Vitest for testing
+- Follow existing patterns and conventions
+
+## Future Enhancements
+
+### Planned Features
+- **Notifications**: Email, Signal, Telegram, SMS notifications for new pins
+- **Photo Uploads**: Direct photo upload and storage
+- **User Accounts**: Optional authentication for persistent maps
+- **Map Analytics**: Usage statistics and insights
+- **Export/Import**: Map data export in various formats
+
+### Notifications (Planned)
+
+- **Email**: SMTP server integration
+- **Signal**: [signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api)
+- **Telegram**: Bot API integration
+- **SMS**: Provider integration (complex, TBD)
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Write tests for new features
+4. Ensure all tests pass
+5. Submit a pull request
+
+## License
+
+See [LICENSE.md](./LICENSE.md) for details.
+
+## Support
+
+For deployment help, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+
+For encryption testing, see [ENCRYPTION_TESTING.md](./ENCRYPTION_TESTING.md).
