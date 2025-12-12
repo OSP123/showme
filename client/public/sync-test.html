@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pins Sync Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .window { border: 2px solid #333; padding: 15px; margin: 10px; min-height: 200px; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; cursor: pointer; }
+        .pin { background: #e0f7fa; padding: 8px; margin: 5px; border-radius: 4px; }
+        #log { background: #f5f5f5; padding: 10px; margin-top: 20px; max-height: 300px; overflow-y: auto; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>🧪 ShowMe Pins Sync Test</h1>
+    <p><strong>Map ID:</strong> <code id="mapId">c1252a68-0548-4814-a0ce-0dbfb2d128ed</code></p>
+    
+    <div class="window">
+        <h2>Controls</h2>
+        <button onclick="loadPins()">🔄 Reload Pins from Local DB</button>
+        <button onclick="addTestPin()">➕ Add Test Pin</button>
+        <button onclick="clearLog()">🗑️ Clear Log</button>
+    </div>
+    
+    <div class="window">
+        <h2>Local Pins (<span id="pinCount">0</span>)</h2>
+        <div id="pinsList"></div>
+    </div>
+    
+    <div id="log">
+        <strong>Event Log:</strong><br>
+    </div>
+
+    <script type="module">
+        import { PGlite } from 'https://cdn.jsdelivr.net/npm/@electric-sql/pglite/dist/index.js';
+        import { electricSync } from 'https://cdn.jsdelivr.net/npm/@electric-sql/pglite-sync/dist/index.js';
+
+        const mapId = document.getElementById('mapId').textContent;
+        let db;
+
+        // Initialize PGlite
+        async function init() {
+            log('Initializing PGlite...', 'info');
+            try {
+                db = await PGlite.create({
+                    dataDir: 'idb://showmedb',
+                    extensions: { electric: electricSync() }
+                });
+                
+                // Setup ElectricSQL sync for pins
+                await db.electric.syncShapeToTable({
+                    shape: {
+                        url: 'http://localhost:3013/v1/shape',
+                        params: {
+                            table: 'pins',
+                            source_id: 'dev-source-001'
+                        }
+                    },
+                    table: 'pins',
+                    primaryKey: ['id'],
+                    shapeKey: 'pins',
+                    initialInsertMethod: 'json'
+                });
+                
+                log('✅ ElectricSQL sync configured for pins', 'success');
+                
+                // Listen for changes
+                db.listen('pins', () => {
+                    log('📡 Pins table changed!', 'success');
+                    loadPins();
+                });
+                
+                loadPins();
+            } catch (e) {
+                log(`❌ Init error: ${e.message}`, 'error');
+                console.error(e);
+            }
+        }
+
+        async function loadPins() {
+            if (!db) {
+                log('DB not initialized', 'error');
+                return;
+            }
+            
+            try {
+                const result = await db.query(`SELECT * FROM pins WHERE map_id = $1 ORDER BY created_at DESC`, [mapId]);
+                const pins = result.rows;
+                
+                document.getElementById('pinCount').textContent = pins.length;
+                
+                const list = document.getElementById('pinsList');
+                list.innerHTML = pins.map(pin => `
+                    <div class="pin">
+                        <strong>${pin.type || 'other'}</strong> - 
+                        ${new Date(pin.created_at).toLocaleTimeString()}
+                        <br><small>ID: ${pin.id.substring(0, 8)}...</small>
+                    </div>
+                `).join('');
+                
+                log(`Loaded ${pins.length} pins`, 'info');
+            } catch (e) {
+                log(`❌ Load error: ${e.message}`, 'error');
+                console.error(e);
+            }
+        }
+
+        async function addTestPin() {
+            if (!db) {
+                log('DB not initialized', 'error');
+                return;
+            }
+            
+            try {
+                const id = crypto.randomUUID();
+                const now = new Date().toISOString();
+                const types = ['medical', 'water', 'food', 'shelter'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                
+                await db.query(
+                    `INSERT INTO pins (id, map_id, lat, lng, type, tags, photo_urls, created_at, updated_at)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                    [id, mapId, 37.7749, -122.4194, type, [type], [], now, now]
+                );
+                
+                log(`✅ Added ${type} pin locally`, 'success');
+                loadPins();
+            } catch (e) {
+                log(`❌ Add error: ${e.message}`, 'error');
+                console.error(e);
+            }
+        }
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '<strong>Event Log:</strong><br>';
+        }
+
+        window.loadPins = loadPins;
+        window.addTestPin = addTestPin;
+        window.clearLog = clearLog;
+
+        init();
+    </script>
+</body>
+</html>

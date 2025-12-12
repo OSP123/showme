@@ -3,9 +3,9 @@ import { electricSync } from '@electric-sql/pglite-sync';
 
 declare global {
   interface ImportMetaEnv {
-    readonly VITE_ELECTRIC_SHAPE_URL:  string;
-    readonly VITE_ELECTRIC_SOURCE_ID:  string;
-    readonly VITE_ELECTRIC_SECRET?:    string; // Optional in insecure mode
+    readonly VITE_ELECTRIC_SHAPE_URL: string;
+    readonly VITE_ELECTRIC_SOURCE_ID: string;
+    readonly VITE_ELECTRIC_SECRET?: string; // Optional in insecure mode
   }
 }
 
@@ -40,7 +40,7 @@ export function initLocalDb(): Promise<PGlite> {
     // Add error handler to catch duplicate key errors during ElectricSQL sync
     // These can occur when ElectricSQL tries to sync data that already exists locally
     const originalQuery = pdb.query.bind(pdb);
-    pdb.query = async function(sql: string, params?: any[]) {
+    pdb.query = async function (sql: string, params?: any[]) {
       try {
         return await originalQuery(sql, params);
       } catch (error: any) {
@@ -55,155 +55,146 @@ export function initLocalDb(): Promise<PGlite> {
       }
     };
 
-    // Create tables
+    // Create tables with schema matching PostgreSQL exactly
     await pdb.exec(`
       CREATE TABLE IF NOT EXISTS maps (
-        id             TEXT PRIMARY KEY,
+        id             UUID PRIMARY KEY,
         name           TEXT NOT NULL,
-        is_private     TEXT NOT NULL DEFAULT 'false',
+        is_private     BOOLEAN NOT NULL DEFAULT FALSE,
         access_token   TEXT,
-        fuzzing_enabled TEXT NOT NULL DEFAULT 'false',
+        fuzzing_enabled BOOLEAN NOT NULL DEFAULT FALSE,
         fuzzing_radius  INTEGER NOT NULL DEFAULT 100,
-        created_at     TEXT NOT NULL
+        created_at     TIMESTAMPTZ NOT NULL
       );
     `);
     await pdb.exec(`
       CREATE TABLE IF NOT EXISTS pins (
-        id           TEXT PRIMARY KEY,
-        map_id       TEXT NOT NULL,
+        id           UUID PRIMARY KEY,
+        map_id       UUID NOT NULL,
         lat          DOUBLE PRECISION NOT NULL,
         lng          DOUBLE PRECISION NOT NULL,
         type         TEXT,
-        tags         TEXT NOT NULL DEFAULT '{}',
+        tags         TEXT[] NOT NULL DEFAULT '{}',
         description  TEXT,
-        photo_urls   TEXT NOT NULL DEFAULT '{}',
-        expires_at   TEXT,
-        created_at   TEXT NOT NULL,
-        updated_at   TEXT NOT NULL
+        photo_urls   TEXT[] NOT NULL DEFAULT '{}',
+        expires_at   TIMESTAMPTZ,
+        created_at   TIMESTAMPTZ NOT NULL,
+        updated_at   TIMESTAMPTZ NOT NULL
       );
     `);
 
-    // Migrate existing databases: add new columns if they don't exist
-    // Simply try to add them and catch "duplicate column" errors
-    console.log('🔄 Checking for database migrations...');
-    
-    // Migrate pins table
-    try {
-      await pdb.exec(`ALTER TABLE pins ADD COLUMN expires_at TEXT`);
-      console.log('✅ Added expires_at column to pins table');
-    } catch (error: any) {
-      const errorMsg = error?.message || String(error);
-      if (!errorMsg.includes('duplicate column') && !errorMsg.includes('already exists')) {
-        console.warn('⚠️ Could not add expires_at column:', errorMsg);
-      }
-    }
-    
-    try {
-      await pdb.exec(`ALTER TABLE pins ADD COLUMN type TEXT`);
-      console.log('✅ Added type column to pins table');
-    } catch (error: any) {
-      const errorMsg = error?.message || String(error);
-      if (!errorMsg.includes('duplicate column') && !errorMsg.includes('already exists')) {
-        console.warn('⚠️ Could not add type column:', errorMsg);
-      }
-    }
+    console.log('✅ Database schema matches PostgreSQL');
 
-    // Migrate maps table
-    try {
-      await pdb.exec(`ALTER TABLE maps ADD COLUMN fuzzing_enabled TEXT NOT NULL DEFAULT 'false'`);
-      console.log('✅ Added fuzzing_enabled column to maps table');
-    } catch (error: any) {
-      const errorMsg = error?.message || String(error);
-      if (!errorMsg.includes('duplicate column') && !errorMsg.includes('already exists')) {
-        console.warn('⚠️ Could not add fuzzing_enabled column:', errorMsg);
-      }
-    }
-    
-    try {
-      await pdb.exec(`ALTER TABLE maps ADD COLUMN fuzzing_radius INTEGER NOT NULL DEFAULT 100`);
-      console.log('✅ Added fuzzing_radius column to maps table');
-    } catch (error: any) {
-      const errorMsg = error?.message || String(error);
-      if (!errorMsg.includes('duplicate column') && !errorMsg.includes('already exists')) {
-        console.warn('⚠️ Could not add fuzzing_radius column:', errorMsg);
-      }
-    }
-
-    // Setup sync for maps only (pins will be synced per-map in PinLayer)
-    const syncParams: any = { 
-      table: 'maps', 
-      source_id: SOURCE_ID 
+    // Setup sync params for both tables
+    const mapsSyncParams: any = {
+      table: 'maps',
+      source_id: SOURCE_ID
     };
-    
+
+    const pinsSyncParams: any = {
+      table: 'pins',
+      source_id: SOURCE_ID
+    };
+
     // Only add secret if it exists (for secure mode)
     if (SOURCE_SECRET) {
-      syncParams.secret = SOURCE_SECRET;
+      mapsSyncParams.secret = SOURCE_SECRET;
+      pinsSyncParams.secret = SOURCE_SECRET;
     }
 
-    console.log('🔄 Setting up maps sync with params:', syncParams);
+    console.log('🔄 Setting up sync for maps and pins...');
 
     // Don't setup ElectricSQL sync if panic wipe is active
     if ((window as any).__panicWipeActive || localStorage.getItem('__panicWipeActive') === 'true') {
       console.log('⏸️ Skipping ElectricSQL sync setup - panic wipe is active');
     } else {
       try {
+        // Sync maps table
         await pdb.electric.syncShapeToTable({
-          shape: { 
-            url: SHAPE_URL, 
-            params: syncParams 
+          shape: {
+            url: SHAPE_URL,
+            params: mapsSyncParams
           },
           table: 'maps',
           primaryKey: ['id'],
           shapeKey: 'maps',
           initialInsertMethod: 'json'
         });
-        console.log('✅ Maps sync configured - pins will sync per-map in PinLayer component');
-    } catch (error: any) {
-      const errorMsg = error?.message || String(error);
-      const statusCode = error?.status || error?.response?.status;
-      
-      // Handle 409 Conflict - this can happen if the shape handle is invalid/expired
-      // The app can still work offline, so we'll log it but continue
-      if (statusCode === 409 || errorMsg.includes('409') || errorMsg.includes('Conflict')) {
-        console.warn('⚠️ ElectricSQL sync conflict (409) - this is usually non-critical. App will continue in offline mode.');
-        console.warn('   If sync is needed, try refreshing the page or restarting ElectricSQL service.');
-      } else {
-        // For other errors, log but don't fail initialization
-        console.warn('⚠️ ElectricSQL sync setup failed (non-critical):', errorMsg);
-        console.warn('   App will continue in offline mode. Sync will be retried automatically.');
-      }
+        console.log('✅ Maps sync configured');
+
+        // Sync pins table
+        await pdb.electric.syncShapeToTable({
+          shape: {
+            url: SHAPE_URL,
+            params: pinsSyncParams
+          },
+          table: 'pins',
+          primaryKey: ['id'],
+          shapeKey: 'pins',
+          initialInsertMethod: 'json'
+        });
+        console.log('✅ Pins sync configured - real-time updates enabled!');
+      } catch (error: any) {
+        const errorMsg = error?.message || String(error);
+        const statusCode = error?.status || error?.response?.status;
+
+        // Handle 409 Conflict - this can happen if the shape handle is invalid/expired
+        // The app can still work offline, so we'll log it but continue
+        if (statusCode === 409 || errorMsg.includes('409') || errorMsg.includes('Conflict')) {
+          console.warn('⚠️ ElectricSQL sync conflict (409) - this is usually non-critical. App will continue in offline mode.');
+          console.warn('   If sync is needed, try refreshing the page or restarting ElectricSQL service.');
+        } else {
+          // For other errors, log but don't fail initialization
+          console.warn('⚠️ ElectricSQL sync setup failed (non-critical):', errorMsg);
+          console.warn('   App will continue in offline mode. Sync will be retried automatically.');
+        }
       }
     }
 
-    // Add database change listeners for reactive updates
-    console.log('📡 Setting up database change listeners...');
-    
-    // Listen for changes to maps table
-    pdb.listen('maps', (data) => {
-      console.log('📡 Maps table change detected:', data);
-      // Dispatch custom event for components to react to
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('db-change', { 
-          detail: { table: 'maps', data } 
-        }));
+    // IMPORTANT: pglite.listen() only fires for LOCAL changes, NOT for ElectricSQL synced changes!
+    // ElectricSQL syncs data silently to IndexedDB without triggering listen() events.
+    // Solution: Poll the database periodically to detect changes from other clients.
+    console.log('📡 Setting up change detection via database polling...');
+
+    // Track last known counts to detect changes
+    let lastMapsCount = 0;
+    let lastPinsCount = 0;
+
+    // Poll database every 2 seconds to detect ElectricSQL synced changes
+    setInterval(async () => {
+      if ((window as any).__panicWipeActive) return;
+
+      try {
+        // Check for map changes
+        const mapsResult = await pdb.query('SELECT COUNT(*) as count FROM maps');
+        const currentMapsCount = mapsResult.rows[0]?.count || 0;
+        if (currentMapsCount !== lastMapsCount) {
+          lastMapsCount = currentMapsCount;
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('db-change', {
+              detail: { table: 'maps', count: currentMapsCount }
+            }));
+          }
+        }
+
+        // Check for pin changes
+        const pinsResult = await pdb.query('SELECT COUNT(*) as count FROM pins');
+        const currentPinsCount = pinsResult.rows[0]?.count || 0;
+        if (currentPinsCount !== lastPinsCount) {
+          lastPinsCount = currentPinsCount;
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('db-change', {
+              detail: { table: 'pins', count: currentPinsCount }
+            }));
+          }
+        }
+      } catch (error) {
+        console.debug('Polling error (non-critical):', error);
       }
-    });
-    
-    // Listen for changes to pins table  
-    pdb.listen('pins', (data: any) => {
-      // Don't dispatch events if panic wipe is active
-      if ((window as any).__panicWipeActive) {
-        console.debug('⏸️ Pins table change ignored - panic wipe active');
-        return;
-      }
-      console.log('📡 Pins table change detected:', data);
-      // Dispatch custom event for components to react to
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('db-change', { 
-          detail: { table: 'pins', data } 
-        }));
-      }
-    });
+    }, 2000);
+
+    console.log('✅ Change detection configured (polling every 2s)');
+
 
     // Log initial table contents
     const mapsResult = await pdb.query('SELECT COUNT(*) as count FROM maps');
@@ -214,7 +205,7 @@ export function initLocalDb(): Promise<PGlite> {
 
     console.log('PGlite initialized successfully');
     db = pdb;
-    
+
     // Start expired pins cleanup (deferred to avoid circular dependencies)
     setTimeout(async () => {
       try {
@@ -225,7 +216,7 @@ export function initLocalDb(): Promise<PGlite> {
         console.warn('⚠️ Could not start expired pins cleanup:', error);
       }
     }, 1000);
-    
+
     return pdb;
   })();
 

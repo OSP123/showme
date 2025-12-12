@@ -35,19 +35,12 @@
     
     window.addEventListener('unhandledrejection', handler);
     
-    // Listen for panic wipe events to stop polling and clear pins
+    // Listen for panic wipe events to stop sync and clear pins
     const panicWipeHandler = () => {
-      console.log('🔄 Panic wipe detected, stopping polling and clearing pins...');
+      console.log('🔄 Panic wipe detected, stopping sync and clearing pins...');
       
       // Set window-level flag FIRST - accessible from any closure
       (window as any).__panicWipeActive = true;
-      
-      // Clear the polling interval IMMEDIATELY
-      if (pollInterval !== null) {
-        clearInterval(pollInterval);
-        pollInterval = null;
-        console.log('✅ Polling interval cleared immediately');
-      }
       
       // Clear all markers immediately
       markers.forEach(m => m.remove());
@@ -55,7 +48,7 @@
       markers = [];
       clusters = [];
       
-      // Also call unsubscribe to clean up map event listeners
+      // Also call unsubscribe to clean up event listeners
       if (unsubscribe) {
         unsubscribe();
         unsubscribe = undefined;
@@ -75,7 +68,6 @@
   let currentMapId = '';
   let clusterIndex: Supercluster | null = null;
   let useClustering = true; // Enable clustering by default
-  let pollInterval: ReturnType<typeof setInterval> | null = null; // Store interval reference for immediate clearing
 
   // Helper function to check if panic wipe is active (checks both window flag and localStorage)
   function isPanicWipeActive(): boolean {
@@ -97,14 +89,11 @@
     let filteredPins = pins;
     if (filterTypes.length > 0) {
       filteredPins = pins.filter((pin) => {
-        try {
-          const tags = pin.tags ? JSON.parse(pin.tags) : [];
-          if (Array.isArray(tags) && tags.length > 0) {
-            const pinType = tags[0];
-            return filterTypes.includes(pinType);
-          }
-        } catch (e) {
-          // Invalid tags JSON
+        // Tags are now arrays (TEXT[]), not JSON strings
+        const tags = Array.isArray(pin.tags) ? pin.tags : [];
+        if (tags.length > 0) {
+          const pinType = tags[0];
+          return filterTypes.includes(pinType);
         }
         // If no type or invalid, only show if 'other' is in filter
         return filterTypes.includes('other');
@@ -237,23 +226,20 @@
       // Pin type/emoji header
       popupContent += `<div class="pin-header">`;
       popupContent += `<span class="pin-emoji-large">${emoji}</span>`;
-      try {
-        const tags = pin.tags ? JSON.parse(pin.tags) : [];
-        if (Array.isArray(tags) && tags.length > 0) {
-          const typeLabels: Record<string, string> = {
-            medical: 'Medical',
-            water: 'Water',
-            checkpoint: 'Checkpoint',
-            shelter: 'Shelter',
-            food: 'Food',
-            danger: 'Danger',
-            other: 'Location'
-          };
-          const typeLabel = typeLabels[tags[0]] || tags[0];
-          popupContent += `<span class="pin-type-label">${typeLabel}</span>`;
-        }
-      } catch (e) {
-        // Invalid tags JSON
+      // Tags are now arrays (TEXT[]), not JSON strings
+      const tags = Array.isArray(pin.tags) ? pin.tags : [];
+      if (tags.length > 0) {
+        const typeLabels: Record<string, string> = {
+          medical: 'Medical',
+          water: 'Water',
+          checkpoint: 'Checkpoint',
+          shelter: 'Shelter',
+          food: 'Food',
+          danger: 'Danger',
+          other: 'Location'
+        };
+        const typeLabel = typeLabels[tags[0]] || tags[0];
+        popupContent += `<span class="pin-type-label">${typeLabel}</span>`;
       }
       popupContent += `</div>`;
       
@@ -263,21 +249,18 @@
       }
       
       // Tags
-      try {
-        const tags = pin.tags ? JSON.parse(pin.tags) : [];
-        if (Array.isArray(tags) && tags.length > 1) {
-          // Skip first tag (type) as it's already shown
-          const otherTags = tags.slice(1);
-          if (otherTags.length > 0) {
-            popupContent += `<div class="pin-tags">`;
-            otherTags.forEach((tag: string) => {
-              popupContent += `<span class="pin-tag">${tag}</span>`;
-            });
-            popupContent += `</div>`;
-          }
+      // Tags are now arrays (TEXT[]), not JSON strings
+      const tagsForDisplay = Array.isArray(pin.tags) ? pin.tags : [];
+      if (tagsForDisplay.length > 1) {
+        // Skip first tag (type) as it's already shown
+        const otherTags = tagsForDisplay.slice(1);
+        if (otherTags.length > 0) {
+          popupContent += `<div class="pin-tags">`;
+          otherTags.forEach((tag: string) => {
+            popupContent += `<span class="pin-tag">${tag}</span>`;
+          });
+          popupContent += `</div>`;
         }
-      } catch (e) {
-        // Invalid tags JSON
       }
       
       // Timestamp
@@ -307,10 +290,10 @@
   }
 
   async function setupSync() {
-    // Check panic wipe flag - if set, skip polling but still draw local pins
+    // Check panic wipe flag - if set, skip sync setup but still draw local pins
     const panicWipeActive = isPanicWipeActive();
     if (panicWipeActive) {
-      console.log('⏸️ Skipping polling setup - panic wipe is active');
+      console.log('⏸️ Skipping sync setup - panic wipe is active');
       // Still draw pins once from local DB
       await drawPins();
       return;
@@ -321,173 +304,41 @@
       
       const db = await initLocalDb();
       
-      // Skip ElectricSQL sync for pins due to schema mismatch (TEXT[] vs TEXT)
-      // Instead, poll both local DB and PostgREST to get updates
-      console.log('🔄 Using polling for pin updates');
+      // Use database change listeners instead of polling
+      // ElectricSQL will automatically sync and trigger these listeners
+      console.log('📡 Setting up database change listeners for real-time sync...');
       
-      let lastPinCount = 0;
-      
-      // Poll function that checks both local and server
-      const pollForUpdates = async () => {
-        // Check panic wipe flag FIRST - if set, stop polling completely
+      // Listen for db-change events (dispatched by pglite.ts when pins table changes)
+      const dbChangeHandler = async (event: CustomEvent) => {
         if (isPanicWipeActive()) {
-          console.debug('⏸️ Polling stopped - panic wipe is active');
-          // Clear the interval if flag is set
-          if (pollInterval !== null) {
-            clearInterval(pollInterval);
-            pollInterval = null;
-          }
+          console.debug('⏸️ Database change ignored - panic wipe active');
           return;
         }
         
-        try {
-          // Check local database
+        const { table, data } = event.detail;
+        if (table === 'pins') {
+          console.log('📡 Pins table changed, redrawing...');
           await drawPins();
-          
-          // Check again after async operation (panic wipe might have happened)
-          if (isPanicWipeActive()) {
-            console.debug('⏸️ Polling disabled during drawPins - aborting');
-            return;
-          }
-          
-          // Also fetch from PostgREST to get pins from other clients
-          try {
-            const response = await fetch(
-              `http://localhost:3015/pins?map_id=eq.${mapId}&select=*&order=created_at.desc`
-            );
-            
-            // Check again after fetch (panic wipe might have happened)
-            if (isPanicWipeActive()) {
-              console.debug('⏸️ Polling disabled during fetch - aborting');
-              return;
-            }
-            
-            if (response.ok) {
-              const serverPins = await response.json();
-              
-              // Convert server pins (TEXT[] arrays) to local format and insert
-              for (const serverPin of serverPins) {
-                // Check flag before each insert (panic wipe might have happened)
-                if (isPanicWipeActive()) {
-                  console.debug('⏸️ Polling disabled during pin insertion - aborting');
-                  return;
-                }
-                
-                // CRITICAL: Check flag BEFORE querying DB (panic wipe might have happened)
-                if (isPanicWipeActive()) {
-                  console.debug('⏸️ Panic wipe active - aborting pin processing');
-                  return;
-                }
-                
-                // Check if pin already exists locally
-                const existing = await db.query(
-                  `SELECT id FROM pins WHERE id = $1`,
-                  [serverPin.id]
-                );
-                
-                // Check flag again after query (panic wipe might have happened during query)
-                if (isPanicWipeActive()) {
-                  console.debug('⏸️ Panic wipe active after query - aborting');
-                  return;
-                }
-                
-                if (existing.rows.length === 0) {
-                  // CRITICAL: Check flag again right before inserting (panic wipe might have happened)
-                  if (isPanicWipeActive()) {
-                    console.debug('⏸️ Panic wipe active - aborting pin insertion');
-                    return;
-                  }
-                  
-                  // Convert arrays to JSON strings
-                  const tagsJson = Array.isArray(serverPin.tags) 
-                    ? JSON.stringify(serverPin.tags) 
-                    : (serverPin.tags || '[]');
-                  const photoUrlsJson = Array.isArray(serverPin.photo_urls)
-                    ? JSON.stringify(serverPin.photo_urls)
-                    : (serverPin.photo_urls || '[]');
-                  
-                  // Insert into local database (include new Phase 3 fields if they exist)
-                  // Try with new columns first, fall back to old schema if needed
-                  try {
-                    await db.query(
-                      `INSERT INTO pins (id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at)
-                       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                       ON CONFLICT (id) DO NOTHING`,
-                      [
-                        serverPin.id,
-                        serverPin.map_id,
-                        serverPin.lat,
-                        serverPin.lng,
-                        serverPin.type || null,
-                        tagsJson,
-                        serverPin.description || null,
-                        photoUrlsJson,
-                        serverPin.expires_at || null,
-                        serverPin.created_at,
-                        serverPin.updated_at
-                      ]
-                    );
-                  } catch (insertError: any) {
-                    // If new columns don't exist, fall back to old schema
-                    const errorMsg = insertError?.message || String(insertError);
-                    if (errorMsg.includes('expires_at') || errorMsg.includes('type') || errorMsg.includes('does not exist')) {
-                      await db.query(
-                        `INSERT INTO pins (id, map_id, lat, lng, tags, description, photo_urls, created_at, updated_at)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                         ON CONFLICT (id) DO NOTHING`,
-                        [
-                          serverPin.id,
-                          serverPin.map_id,
-                          serverPin.lat,
-                          serverPin.lng,
-                          tagsJson,
-                          serverPin.description || null,
-                          photoUrlsJson,
-                          serverPin.created_at,
-                          serverPin.updated_at
-                        ]
-                      );
-                    } else {
-                      throw insertError;
-                    }
-                  }
-                  
-                  // Check flag again before redrawing (panic wipe might have happened during insert)
-                  if (!isPanicWipeActive()) {
-                    // Redraw to show new pin
-                    await drawPins();
-                  }
-                }
-              }
-            }
-          } catch (fetchError) {
-            // PostgREST might be unavailable, that's okay
-            console.debug('PostgREST fetch failed (expected if offline):', fetchError);
-          }
-        } catch (error) {
-          console.error('❌ Error polling for updates:', error);
         }
       };
       
-      // Poll every 2 seconds - store interval reference for immediate clearing
-      pollInterval = setInterval(pollForUpdates, 2000);
+      window.addEventListener('db-change', dbChangeHandler as EventListener);
       
       // Redraw pins when map moves/zooms (for clustering)
       const onMoveEnd = () => {
-        // Always redraw - flag only prevents PostgREST polling, not local display
+        // Always redraw - flag only prevents sync setup, not local display
         drawPins();
       };
       map.on('moveend', onMoveEnd);
       map.on('zoomend', onMoveEnd);
       
       unsubscribe = () => {
-        if (pollInterval !== null) {
-          clearInterval(pollInterval);
-          pollInterval = null;
-        }
+        window.removeEventListener('db-change', dbChangeHandler as EventListener);
         map.off('moveend', onMoveEnd);
         map.off('zoomend', onMoveEnd);
       };
+      
+      console.log('✅ Real-time sync configured using ElectricSQL!');
       
     } catch (error) {
       console.error('Failed to setup sync:', error);
@@ -496,8 +347,8 @@
 
   // Reactive: setup when map or mapId changes, or when panic wipe flag is cleared
   $: if (map && mapId) {
-    // Check if we need to setup sync (either new mapId or flag was cleared and polling isn't running)
-    const shouldSetup = mapId !== currentMapId || (pollInterval === null && !isPanicWipeActive());
+    // Check if we need to setup sync (either new mapId or we haven't set up yet)
+    const shouldSetup = mapId !== currentMapId || (!unsubscribe && !isPanicWipeActive());
     
     if (shouldSetup) {
       // Clean up previous subscription
