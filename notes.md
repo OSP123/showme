@@ -147,3 +147,22 @@ Test Results:
 Follow-ups:
 - None - encryption implementation is complete and fully tested
 
+---
+
+Date: 2025-12-12
+
+Tasks:
+- Fixed ElectricSQL schema sync issues
+  - Aligned PGlite schema with PostgreSQL (UUID, BOOLEAN, TEXT[], TIMESTAMPTZ)
+  - Re-enabled sync for both maps and pins tables  
+  - Implemented polling-based change detection (2s interval) since pglite.listen() doesn't fire for ElectricSQL synced changes
+  - Fixed array handling in api.ts, pinUtils.ts, and PinLayer.svelte to use native arrays for TEXT[] columns
+  - Removed inefficient PostgREST polling workaround (replaced by ElectricSQL + DB polling)
+  - Pins now sync between clients in real-time
+  - Committed and pushed changes to main branch
+
+Follow-ups:
+- Users need to clear IndexedDB once: `indexedDB.deleteDatabase('showmedb')`
+- Add E2E tests for multi-client sync
+- Monitor sync performance in production
+- Address pre-existing TypeScript lint errors (tsconfig issues, non-blocking)
