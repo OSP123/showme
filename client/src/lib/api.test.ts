@@ -18,7 +18,7 @@ describe('API Functions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Create a mock database
     mockDb = {
       query: vi.fn(),
@@ -81,7 +81,7 @@ describe('API Functions', () => {
       });
 
       const { operationQueue } = await import('./operationQueue');
-      
+
       const result = await createMap(mockDb, 'Test Map', false);
 
       expect(result).toHaveProperty('id');
@@ -146,9 +146,8 @@ describe('API Functions', () => {
         call[0].includes('INSERT INTO pins')
       );
 
-      // tags is now 6th parameter (index 5) after adding type column
-      const tagsJson = insertCall[1][5];
-      const tags = JSON.parse(tagsJson);
+      // tags is now 6th parameter (index 5) and is a native array, not JSON
+      const tags = insertCall[1][5];
 
       expect(tags).toContain('medical');
       expect(tags).toContain('urgent');
@@ -177,8 +176,8 @@ describe('API Functions', () => {
 
       // Parameters shifted: id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at
       expect(insertCall[1][6]).toBeNull(); // description (index 6)
-      expect(insertCall[1][7]).toBe('[]'); // photo_urls (index 7)
-      expect(insertCall[1][5]).toBe('[]'); // tags (index 5)
+      expect(insertCall[1][7]).toEqual([]); // photo_urls (index 7) - now an array
+      expect(insertCall[1][5]).toEqual([]); // tags (index 5) - now an array
       expect(insertCall[1][4]).toBeNull(); // type (index 4)
       expect(insertCall[1][8]).toBeNull(); // expires_at (index 8)
     });
@@ -192,7 +191,7 @@ describe('API Functions', () => {
       });
 
       const { operationQueue } = await import('./operationQueue');
-      
+
       const result = await addPin(mockDb, pinData);
 
       expect(result).toHaveProperty('id');

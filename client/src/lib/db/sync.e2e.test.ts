@@ -25,16 +25,8 @@ describe('ElectricSQL Multi-Client Sync', () => {
         expect(true).toBe(true); // Placeholder for now
     });
 
-    test('TODO: Playwright E2E test for real multi-client sync', () => {
-        // This test requires Playwright setup:
-        // 1. Start Docker services (make sure electric & db are running)
-        // 2. Open two browser contexts
-        // 3. Navigate both to same map
-        // 4. Add pin in context 1
-        // 5. Verify pin appears in context 2 within 2-3 seconds
-
-        test.skip('Install Playwright first: npm install -D @playwright/test');
-    });
+    // TODO: Add Playwright E2E test once installed
+    // test('real multi-client sync', async () => { ... });
 });
 
 /**

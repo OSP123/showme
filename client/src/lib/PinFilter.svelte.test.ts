@@ -1,8 +1,10 @@
-// Skip Svelte component tests for now due to tsconfig preprocessing issues
-// These can be enabled once the tsconfig resolution is fixed
-import { describe, it } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/svelte';
+import PinFilter from './PinFilter.svelte';
 
-describe.skip('PinFilter Component', () => {
+type PinType = 'medical' | 'water' | 'checkpoint' | 'shelter' | 'food' | 'danger' | 'other';
+
+describe('PinFilter Component', () => {
   let selectedTypes: PinType[] = [];
   let filterChangeHandler: (event: CustomEvent<{ types: PinType[] }>) => void;
 
@@ -90,4 +92,3 @@ describe.skip('PinFilter Component', () => {
     expect(screen.getByText(/Showing: All pins/)).toBeInTheDocument();
   });
 });
-
