@@ -19,7 +19,7 @@ describe('API Functions - Phase 3 Features', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Create a mock database
     mockDb = {
       query: vi.fn(),
@@ -45,9 +45,9 @@ describe('API Functions - Phase 3 Features', () => {
 
       const beforeTime = new Date();
       beforeTime.setHours(beforeTime.getHours() + PIN_TTL_HOURS.checkpoint);
-      
+
       const result = await addPin(mockDb, pinData);
-      
+
       const afterTime = new Date();
       afterTime.setHours(afterTime.getHours() + PIN_TTL_HOURS.checkpoint);
 
@@ -141,7 +141,7 @@ describe('API Functions - Phase 3 Features', () => {
         call[0].includes('INSERT INTO pins')
       );
       expect(insertCalls.length).toBeGreaterThan(0);
-      
+
       const insertCall = insertCalls[0];
       const lat = insertCall[1][2];
       const lng = insertCall[1][3];
@@ -149,7 +149,7 @@ describe('API Functions - Phase 3 Features', () => {
       // Coordinates should be fuzzed (not exact)
       expect(lat).not.toBe(40.7128);
       expect(lng).not.toBe(-74.0060);
-      
+
       // But should be close (within ~100m = ~0.001 degrees)
       expect(Math.abs(lat - 40.7128)).toBeLessThan(0.002);
       expect(Math.abs(lng - -74.0060)).toBeLessThan(0.002);
@@ -182,7 +182,7 @@ describe('API Functions - Phase 3 Features', () => {
         call[0].includes('INSERT INTO pins')
       );
       expect(insertCalls.length).toBeGreaterThan(0);
-      
+
       const insertCall = insertCalls[0];
       const lat = insertCall[1][2];
       const lng = insertCall[1][3];
@@ -200,17 +200,41 @@ describe('API Functions - Phase 3 Features', () => {
         type: 'water',
       };
 
+      // Mock LOCAL map query (first - for ensureMapExistsInPostgres)
+      (mockDb.query as any).mockResolvedValueOnce({
+        rows: [{ id: 'test-map-id', name: 'Test Map' }],
+      });
+
+      //Mock map query for fuzzing check (second query)
+      (mockDb.query as any).mockResolvedValueOnce({
+        rows: [{ fuzzing_enabled: false }],
+      });
+
+      // Mock fetch for map existence check - map exists
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [{ id: 'test-map-id' }],
+      });
+
+      // Mock fetch for pin creation
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        text: async () => '',
+      });
+
       await addPin(mockDb, pinData);
 
-      // Check PostgREST call
+      // Check PostgREST call for pin creation (should be second fetch)
       const fetchCalls = (global.fetch as any).mock.calls;
-      const postgresCall = fetchCalls.find((call: any[]) => 
+      const postgresCall = fetchCalls.find((call: any[]) =>
         call[0].includes('/pins')
       );
 
       expect(postgresCall).toBeTruthy();
       const body = JSON.parse(postgresCall[1].body);
-      
+
       expect(body.type).toBe('water');
       expect(body.expires_at).toBeTruthy();
       expect(new Date(body.expires_at).getTime()).toBeGreaterThan(Date.now());
@@ -299,7 +323,24 @@ describe('API Functions - Phase 3 Features', () => {
         type: 'medical',
       };
 
-      // First call fails with column error
+      // Mock LOCAL map query (for ensureMapExistsInPostgres)
+      (mockDb.query as any).mockResolvedValueOnce({
+        rows: [{ id: 'test-map-id', name: 'Test Map' }],
+      });
+
+      // Mock map query for fuzzing check
+      (mockDb.query as any).mockResolvedValueOnce({
+        rows: [{ fuzzing_enabled: false }],
+      });
+
+      // Mock fetch for map existence check - map exists
+      (global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [{ id: 'test-map-id' }],
+      });
+
+      // First pin creation call fails with column error
       (global.fetch as any)
         .mockResolvedValueOnce({
           ok: false,
@@ -316,15 +357,10 @@ describe('API Functions - Phase 3 Features', () => {
           text: async () => '',
         });
 
-      // Mock pin insert
-      (mockDb.query as any).mockResolvedValueOnce({
-        rows: [],
-      });
-
       const result = await addPin(mockDb, pinData);
 
       expect(result).toHaveProperty('id');
-      
+
       // Should have called PostgREST twice
       const fetchCalls = (global.fetch as any).mock.calls.filter((call: any[]) =>
         call[0].includes('/pins')
@@ -375,7 +411,7 @@ describe('API Functions - Phase 3 Features', () => {
       const result = await addPin(mockDb, pinData);
 
       expect(result).toHaveProperty('id');
-      
+
       // Should queue without Phase 3 fields
       expect(operationQueue.enqueue).toHaveBeenCalledWith(
         'addPin',

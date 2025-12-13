@@ -47,7 +47,7 @@ describe('API Functions', () => {
         expect.arrayContaining([
           result.id,
           'Test Map',
-          'false',
+          false,  // is_private is now boolean, not string
           null,
           expect.any(String),
         ])
