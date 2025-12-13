@@ -1,0 +1,45 @@
+services:
+  # ShowMe Web Client
+  - type: web
+    name: showme-client
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: cd client && npm install && npm run build
+    startCommand: cd client && npm run preview -- --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_ELECTRIC_SHAPE_URL
+        sync: false
+      - key: VITE_ELECTRIC_SOURCE_ID
+        sync: false
+      - key: VITE_ELECTRIC_SECRET
+        sync: false
+      - key: VITE_POSTGREST_URL
+        sync: false
+    
+  # PostgreSQL Database
+  - type: pserv
+    name: showme-db
+    env: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./Dockerfile.postgres
+    
+  # ElectricSQL Sync Service
+  - type: web
+    name: showme-electric
+    env: docker
+    region: oregon
+    plan: starter
+    dockerfilePath: ./Dockerfile.electric
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: showme-db
+          property: connectionString
+      - key: ELECTRIC_WRITE_TO_PG_MODE
+        value: logical_replication
+      - key: AUTH_MODE
+        value: insecure
