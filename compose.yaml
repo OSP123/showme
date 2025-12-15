@@ -84,9 +84,9 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_ELECTRIC_SHAPE_URL=http://nginx/v1/shape
+      - VITE_ELECTRIC_SHAPE_URL=http://localhost:3013/v1/shape
       - VITE_ELECTRIC_SOURCE_ID=dev-source-001
-      - VITE_POSTGREST_URL=http://postgres-bridge:3000
+      - VITE_POSTGREST_URL=http://localhost:3000
       - VITE_CLOUDINARY_CLOUD_NAME=dmwttd5c7
       - VITE_CLOUDINARY_UPLOAD_PRESET=showme-photos
     command: sh -c "pnpm install && pnpm run dev --host 0.0.0.0"
