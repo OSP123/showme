@@ -9,12 +9,14 @@ trigger: always_on
 *   **NEVER** leave `npm run dev` or similar commands running in the background indefinitely.
 *   Use `send_command_input` with `Terminate: true` to kill processes started with `run_command`.
 
+
 ### Testing and Verification
 - **ALWAYS test fixes thoroughly before claiming they are complete**
 - **NEVER claim something is "fixed" without proper verification**
 - **Always verify that changes actually work as intended**
 - **Be humble and admit when you're not sure about results**
 - **Check to make sure the processes you're running aren't just hanging**
+- **Always run a build for the application to make sure it works**
 
 ### NEVER GET STUCK - CRITICAL RULE
 - **MAXIMUM 2 ATTEMPTS** at any single operation, then move on or try different approach

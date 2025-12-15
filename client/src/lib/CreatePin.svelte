@@ -1,6 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { PinType, PinData } from './models';
+  import PhotoUpload from './PhotoUpload.svelte';
+  import type { UploadResult } from './imageUpload';
+  import { getThumbnailUrl } from './imageCache';
 
   export let lat: number;
   export let lng: number;
@@ -15,6 +18,8 @@
   let description = '';
   let tags: string[] = [];
   let tagInput = '';
+  let photoUrls: string[] = [];
+  let uploadError = '';
 
   const pinTypes: { value: PinType; label: string; emoji: string }[] = [
     { value: 'medical', label: 'Medical', emoji: '🏥' },
@@ -45,6 +50,20 @@
     }
   }
 
+  function handlePhotoUpload(event: CustomEvent<UploadResult[]>) {
+    const results = event.detail;
+    photoUrls = [...photoUrls, ...results.map(r => r.url)];
+    uploadError = '';
+  }
+
+  function handleUploadError(event: CustomEvent<string>) {
+    uploadError = event.detail;
+  }
+
+  function removePhoto(index: number) {
+    photoUrls = photoUrls.filter((_, i) => i !== index);
+  }
+
   function submit() {
     dispatch('create', {
       lat,
@@ -52,12 +71,15 @@
       type: selectedType,
       description: description.trim() || undefined,
       tags: tags.length > 0 ? tags : undefined,
+      photo_urls: photoUrls.length > 0 ? photoUrls : undefined,
     });
     // Reset form
     selectedType = 'other';
     description = '';
     tags = [];
     tagInput = '';
+    photoUrls = [];
+    uploadError = '';
   }
 
   function cancel() {
@@ -67,6 +89,8 @@
     description = '';
     tags = [];
     tagInput = '';
+    photoUrls = [];
+    uploadError = '';
   }
 </script>
 
@@ -123,6 +147,37 @@
                 {tag}
                 <button type="button" class="tag-remove" on:click={() => removeTag(tag)}>×</button>
               </span>
+            {/each}
+          </div>
+        {/if}
+      </div>
+
+      <div class="form-group">
+        <label>Photos (optional)</label>
+        <PhotoUpload 
+          maxPhotos={5}
+          on:upload={handlePhotoUpload}
+          on:error={handleUploadError}
+        />
+        
+        {#if uploadError}
+          <div class="error-message">{uploadError}</div>
+        {/if}
+        
+        {#if photoUrls.length > 0}
+          <div class="photos-preview">
+            {#each photoUrls as url, index}
+              <div class="photo-thumb">
+                <img src={getThumbnailUrl(url, 100)} alt="Photo {index + 1}" />
+                <button 
+                  type="button" 
+                  class="photo-remove"
+                  on:click={() => removePhoto(index)}
+                  title="Remove photo"
+                >
+                  ✕
+                </button>
+              </div>
             {/each}
           </div>
         {/if}
@@ -362,5 +417,53 @@
       padding: 12px;
     }
   }
-</style>
 
+  .error-message {
+    color: #d32f2f;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  .photos-preview {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .photo-thumb {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid #ddd;
+  }
+
+  .photo-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .photo-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .photo-remove:hover {
+    background: rgba(0, 0, 0, 0.8);
+  }
+</style>
