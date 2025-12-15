@@ -78,16 +78,20 @@ services:
     depends_on:
       - nginx
     volumes:
-      - ./client:/app:cached
+      - ./client/public:/app/public
+      - ./client/src:/app/src
+      - ./client/index.html:/app/index.html
+      - ./client/svelte.config.js:/app/svelte.config.js
+      - ./client/uno.config.ts:/app/uno.config.ts
+      - ./client/vite.config.ts:/app/vite.config.ts
+    environment:
+      VITE_ELECTRIC_SHAPE_URL: http://localhost:3013/v1/shape
+      VITE_ELECTRIC_SOURCE_ID: dev-source-001
+      VITE_CLOUDINARY_CLOUD_NAME: dmwttd5c7
+      VITE_CLOUDINARY_UPLOAD_PRESET: showme-photos
+    ports:
+      - 3012:5173
     networks:
       - net
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_ELECTRIC_SHAPE_URL=http://localhost:3013/v1/shape
-      - VITE_ELECTRIC_SOURCE_ID=dev-source-001
-      - VITE_POSTGREST_URL=http://localhost:3000
-      - VITE_CLOUDINARY_CLOUD_NAME=dmwttd5c7
-      - VITE_CLOUDINARY_UPLOAD_PRESET=showme-photos
     command: sh -c "pnpm install && pnpm run dev --host 0.0.0.0"
     restart: "unless-stopped"
