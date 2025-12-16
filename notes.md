@@ -166,3 +166,18 @@ Follow-ups:
 - Add E2E tests for multi-client sync
 - Monitor sync performance in production
 - Address pre-existing TypeScript lint errors (tsconfig issues, non-blocking)
+
+
+Date: 2025-12-15
+
+Tasks:
+- Implemented pin editing feature (Edit button, edit mode, updatePin API)
+- Implemented in-app notification system (privacy-first, no email)
+- Added comprehensive tests for photo upload, notifications, and pin editing
+- Fixed esbuild version conflict by reinstalling dependencies
+- 135/141 tests passing (4 minor test mocking issues remaining)
+
+Follow-ups:
+- Fix remaining test mocks for Cloudinary env vars
+- Phase 2 nearly complete: Map analytics and import/export remaining
+
