@@ -441,6 +441,82 @@ export async function addPin(
 }
 
 /**
+ * Update an existing pin
+ */
+export async function updatePin(
+  db: PGliteWithSync,
+  pinId: string,
+  updates: Partial<PinData>
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  // Process tags if provided
+  let tagsArray = updates.tags;
+  if (updates.type && tagsArray && !tagsArray.includes(updates.type)) {
+    tagsArray = [updates.type, ...tagsArray];
+  }
+
+  // Process photo URLs
+  const photoUrlsArray = updates.photo_urls || [];
+
+  // Encrypt if needed
+  const encryptionKey = await getEncryptionKey();
+  let finalDescription = updates.description;
+  let finalTags = tagsArray;
+  let finalPhotoUrls = photoUrlsArray;
+
+  if (encryptionKey && (updates.description !== undefined || updates.tags || updates.photo_urls)) {
+    const encrypted = await encryptPinRow({
+      description: updates.description || null,
+      tags: tagsArray ? JSON.stringify(tagsArray) : null,
+      photo_urls: JSON.stringify(photoUrlsArray)
+    }, encryptionKey);
+
+    finalDescription = encrypted.description || finalDescription;
+    finalTags = encrypted.tags ? JSON.parse(encrypted.tags) : tagsArray;
+    finalPhotoUrls = encrypted.photo_urls ? JSON.parse(encrypted.photo_urls) : photoUrlsArray;
+  }
+
+  // Build dynamic UPDATE query based on what's being updated
+  const setClauses: string[] = ['updated_at = $1'];
+  const values: any[] = [now];
+  let paramIndex = 2;
+
+  if (updates.description !== undefined) {
+    setClauses.push(`description = $${paramIndex}`);
+    values.push(finalDescription);
+    paramIndex++;
+  }
+
+  if (finalTags) {
+    setClauses.push(`tags = $${paramIndex}`);
+    values.push(finalTags);
+    paramIndex++;
+  }
+
+  if (updates.photo_urls !== undefined) {
+    setClauses.push(`photo_urls = $${paramIndex}`);
+    values.push(finalPhotoUrls);
+    paramIndex++;
+  }
+
+  if (updates.type) {
+    setClauses.push(`type = $${paramIndex}`);
+    values.push(updates.type);
+    paramIndex++;
+  }
+
+  // Add pinId as last parameter
+  values.push(pinId);
+
+  const query = `UPDATE pins SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`;
+
+  await db.query(query, values);
+
+  console.log(`✅ Pin ${pinId} updated successfully`);
+}
+
+/**
  * Get a map by ID with decryption if enabled
  */
 export async function getMap(
