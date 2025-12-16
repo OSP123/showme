@@ -156,9 +156,10 @@ export function initLocalDb(): Promise<PGlite> {
     // Solution: Poll the database periodically to detect changes from other clients.
     console.log('📡 Setting up change detection via database polling...');
 
-    // Track last known counts to detect changes
+    // Track last known counts and timestamps to detect changes
     let lastMapsCount = 0;
     let lastPinsCount = 0;
+    let lastPinsUpdate = '';
 
     // Poll database every 2 seconds to detect ElectricSQL synced changes
     setInterval(async () => {
@@ -177,11 +178,14 @@ export function initLocalDb(): Promise<PGlite> {
           }
         }
 
-        // Check for pin changes
-        const pinsResult = await pdb.query('SELECT COUNT(*) as count FROM pins');
+        // Check for pin changes (count OR updates)
+        const pinsResult = await pdb.query('SELECT COUNT(*) as count, MAX(updated_at) as last_update FROM pins');
         const currentPinsCount = pinsResult.rows[0]?.count || 0;
-        if (currentPinsCount !== lastPinsCount) {
+        const currentPinsUpdate = pinsResult.rows[0]?.last_update || '';
+
+        if (currentPinsCount !== lastPinsCount || currentPinsUpdate !== lastPinsUpdate) {
           lastPinsCount = currentPinsCount;
+          lastPinsUpdate = currentPinsUpdate;
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('db-change', {
               detail: { table: 'pins', count: currentPinsCount }
