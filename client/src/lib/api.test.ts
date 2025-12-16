@@ -241,6 +241,7 @@ describe('API Functions', () => {
       expect(mockDb.query).toHaveBeenCalledWith(
         expect.stringContaining('expires_at IS NULL OR expires_at >'),
         expect.arrayContaining(['test-map-id', expect.any(String)])
+          expect.arrayContaining(['test-map-id', expect.any(String)])
       );
     });
 
@@ -254,5 +255,109 @@ describe('API Functions', () => {
       expect(pins).toHaveLength(0);
     });
   });
-});
 
+  describe('updatePin', () => {
+    it('should update a pin with new data', async () => {
+      const { updatePin } = await import('./api');
+
+      const updates = {
+        description: 'Updated description',
+        tags: ['danger', 'urgent'],
+        type: 'danger' as const
+      };
+
+      await updatePin(mockDb, 'test-pin-id', updates);
+
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE pins SET'),
+        expect.arrayContaining([
+          expect.any(String), // updated_at
+          'Updated description',
+          ['danger', 'urgent'],
+          'danger',
+          'test-pin-id'
+        ])
+      );
+    });
+
+    it('should update only provided fields', async () => {
+      const { updatePin } = await import('./api');
+
+      const updates = {
+        description: 'New description only'
+      };
+
+      await updatePin(mockDb, 'test-pin-id', updates);
+
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('description = $'),
+        expect.arrayContaining([
+          expect.any(String), // updated_at
+          'New description only',
+          'test-pin-id'
+        ])
+      );
+    });
+
+    it('should handle photo URL updates', async () => {
+      const { updatePin } = await import('./api');
+
+      const updates = {
+        photo_urls: ['https://example.com/photo1.jpg', 'https://example.com/photo2.jpg']
+      };
+
+      await updatePin(mockDb, 'test-pin-id', updates);
+
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('photo_urls = $'),
+        expect.arrayContaining([
+          expect.any(String), // updated_at
+          ['https://example.com/photo1.jpg', 'https://example.com/photo2.jpg'],
+          'test-pin-id'
+        ])
+      );
+    });
+
+    it('should update multiple fields at once', async () => {
+      const { updatePin } = await import('./api');
+
+      const updates = {
+        description: 'Multi-field update',
+        tags: ['medical', 'priority'],
+        type: 'medical' as const,
+        photo_urls: ['https://example.com/photo.jpg']
+      };
+
+      await updatePin(mockDb, 'test-pin-id', updates);
+
+      const queryCall = (mockDb.query as any).mock.calls[0];
+      const query = queryCall[0];
+
+      expect(query).toContain('UPDATE pins SET');
+      expect(query).toContain('updated_at = $');
+      expect(query).toContain('description = $');
+      expect(query).toContain('tags = $');
+      expect(query).toContain('photo_urls = $');
+      expect(query).toContain('type = $');
+      expect(query).toContain('WHERE id = $');
+    });
+
+    it('should add type to tags if not present', async () => {
+      const { updatePin } = await import('./api');
+
+      const updates = {
+        type: 'danger' as const,
+        tags: ['urgent']
+      };
+
+      await updatePin(mockDb, 'test-pin-id', updates);
+
+      const queryCall = (mockDb.query as any).mock.calls[0];
+      const params = queryCall[1];
+
+      // Find tags in params
+      const tagsIndex = params.findIndex((p: any) => Array.isArray(p) && p.includes('danger'));
+      expect(params[tagsIndex]).toEqual(['danger', 'urgent']);
+    });
+  });
+});

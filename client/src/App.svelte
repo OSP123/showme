@@ -11,10 +11,12 @@
   import PanicWipe from '$lib/PanicWipe.svelte';
   import EncryptionSetup from '$lib/EncryptionSetup.svelte';
   import EncryptionTest from '$lib/EncryptionTest.svelte';
+  import NotificationBell from '$lib/NotificationBell.svelte';
   import { initLocalDb }    from '$lib/db/pglite';
   import { createMap, addPin, updatePin, getPins, getMap } from '$lib/api';
   import type { Map as GLMap }  from 'maplibre-gl';
   import type { PinData, MapRow, PinType, PinRow } from '$lib/models';
+  import { notifications, getPinTypeEmoji } from '$lib/notifications';
 
   let db: any;
   let mapId = '';
@@ -30,6 +32,7 @@
   let editMode = false;
   let editPinId: string | null = null;
   let editPinData: Partial<PinData> | null = null;
+  let showNotifications = false;
 
   // OpenStreetMap raster style
   const osmStyle = {
@@ -178,6 +181,14 @@
       await addPin(db, pinData);
       console.log('Pin added successfully');
       
+      // Add notification
+      notifications.add({
+        type: 'pin_added',
+        pinType: pinData.type,
+        emoji: getPinTypeEmoji(pinData.type),
+        message: `New ${pinData.type || 'pin'} added to map`
+      });
+      
       // Close the pin creation modal
       showCreatePin = false;
       showQuickPin = false;
@@ -222,6 +233,14 @@
       await addPin(db, pinData);
       console.log('Quick pin added successfully');
       
+      // Add notification
+      notifications.add({
+        type: 'pin_added',
+        pinType: pinData.type,
+        emoji: getPinTypeEmoji(pinData.type),
+        message: `Quick ${pinData.type} pin added`
+      });
+      
       // Close the quick pin modal
       showQuickPin = false;
       pinLocation = null;
@@ -245,6 +264,14 @@
     try {
       await updatePin(db, pinId, updates);
       console.log('Pin updated successfully');
+      
+      // Add notification
+      notifications.add({
+        type: 'pin_updated',
+        pinType: updates.type,
+        emoji: getPinTypeEmoji(updates.type),
+        message: `Pin updated: ${updates.description?.substring(0, 30) || 'Changes saved'}`
+      });
       
       // Close the edit modal
       showCreatePin = false;
@@ -539,6 +566,7 @@
         >
           🔒
         </button>
+        <NotificationBell bind:open={showNotifications} />
       </div>
 
       {#if showEncryptionSetup}
