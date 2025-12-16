@@ -7,6 +7,7 @@
   import { getPins } from '$lib/api';
   import { getPinColor, getPinEmoji, getTimeAgo } from '$lib/pinUtils';
   import Supercluster from 'supercluster';
+  import { getThumbnailUrl } from '$lib/imageCache';
 
   export let map: GLMap;
   export let mapId: string;
@@ -263,6 +264,20 @@
         }
       }
       
+      // Photos
+      const photoUrls = Array.isArray(pin.photo_urls) ? pin.photo_urls : [];
+      if (photoUrls.length > 0) {
+        popupContent += `<div class="pin-photos">`;
+        photoUrls.slice(0, 3).forEach((url: string, index: number) => {
+          const thumbUrl = getThumbnailUrl(url, 150);
+          popupContent += `<img src="${thumbUrl}" alt="Photo ${index + 1}" class="pin-photo-thumb" onclick="window.open('${url}', '_blank')" />`;
+        });
+        if (photoUrls.length > 3) {
+          popupContent += `<div class="more-photos">+${photoUrls.length - 3} more</div>`;
+        }
+        popupContent += `</div>`;
+      }
+      
       // Timestamp
       if (pin.created_at) {
         const date = new Date(pin.created_at);
@@ -446,17 +461,48 @@
   }
 
   :global(.cluster-inner) {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #4a90e2;
-    color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: rgba(74, 144, 226, 0.7);
+    color: white;
+    font-weight: bold;
     font-size: 14px;
-    border: 3px solid white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  :global(.pin-photos) {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    margin: 12px 0;
+  }
+
+  :global(.pin-photo-thumb) {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+
+  :global(.pin-photo-thumb:hover) {
+    transform: scale(1.05);
+  }
+
+  :global(.more-photos) {
+    grid-column: span 3;
+    text-align: center;
+    font-size: 11px;
+    color: #666;
+    padding: 4px;
+    background: #f5f5f5;
+    border-radius: 4px;
   }
 </style>
+```

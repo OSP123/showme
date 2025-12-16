@@ -1,0 +1,81 @@
+{
+  "name": "@electric-sql/experimental",
+  "description": "Experimental TypeScript features for ElectricSQL.",
+  "version": "1.0.0",
+  "author": "ElectricSQL team and contributors.",
+  "bugs": {
+    "url": "https://github.com/electric-sql/electric/issues"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.6",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.14.1",
+    "@typescript-eslint/parser": "^7.14.1",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "glob": "^10.3.10",
+    "pg": "^8.12.0",
+    "prettier": "^3.3.2",
+    "shx": "^0.3.4",
+    "tsup": "^8.0.1",
+    "typescript": "^5.5.2",
+    "uuid": "^10.0.0",
+    "vitest": "^2.0.2",
+    "@electric-sql/client": "1.0.0"
+  },
+  "peerDependencies": {
+    "@electric-sql/client": "1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@electric-sql/client": {
+      "optional": false
+    }
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.cts",
+        "default": "./dist/cjs/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "homepage": "https://electric-sql.com",
+  "license": "Apache-2",
+  "main": "dist/cjs/index.cjs",
+  "module": "dist/index.legacy-esm.js",
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "^4.18.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/electric-sql/electric.git"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "shx rm -rf dist && tsup && tsc -p tsconfig.build.json",
+    "format": "eslint . --fix",
+    "stylecheck": "eslint . --quiet",
+    "test": "pnpm exec vitest",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

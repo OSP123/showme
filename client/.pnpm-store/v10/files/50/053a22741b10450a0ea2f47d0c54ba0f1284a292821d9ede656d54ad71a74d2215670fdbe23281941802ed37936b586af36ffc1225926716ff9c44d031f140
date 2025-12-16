@@ -1,0 +1,53 @@
+"use strict";var F=Object.defineProperty;var ae=Object.getOwnPropertyDescriptor;var oe=Object.getOwnPropertyNames;var re=Object.prototype.hasOwnProperty;var ie=(t,n)=>{for(var e in n)F(t,e,{get:n[e],enumerable:!0})},ce=(t,n,e,a)=>{if(n&&typeof n=="object"||typeof n=="function")for(let r of oe(n))!re.call(t,r)&&r!==e&&F(t,r,{get:()=>n[r],enumerable:!(a=ae(n,r))||a.enumerable});return t};var le=t=>ce(F({},"__esModule",{value:!0}),t);var ge={};ie(ge,{electricSync:()=>fe});module.exports=le(ge);var v=require("@electric-sql/client"),te=require("@electric-sql/experimental");var pe="subscriptions_metadata";async function V({pg:t,metadataSchema:n,subscriptionKey:e}){let a=await t.query(`
+      SELECT key, shape_metadata, last_lsn
+      FROM ${B(n)}
+      WHERE key = $1
+    `,[e]);if(a.rows.length===0)return null;if(a.rows.length>1)throw new Error(`Multiple subscriptions found for key: ${e}`);let r=a.rows[0];if(typeof r.last_lsn=="string")return{...r,last_lsn:BigInt(r.last_lsn)};throw new Error(`Invalid last_lsn type: ${typeof r.last_lsn}`)}async function J({pg:t,metadataSchema:n,subscriptionKey:e,shapeMetadata:a,lastLsn:r,debug:b}){b&&console.log("updating subscription state",e,a,r),await t.query(`
+      INSERT INTO ${B(n)}
+        (key, shape_metadata, last_lsn)
+      VALUES
+        ($1, $2, $3)
+      ON CONFLICT(key)
+      DO UPDATE SET
+        shape_metadata = EXCLUDED.shape_metadata,
+        last_lsn = EXCLUDED.last_lsn;
+    `,[e,a,r.toString()])}async function Q({pg:t,metadataSchema:n,subscriptionKey:e}){await t.query(`DELETE FROM ${B(n)} WHERE key = $1`,[e])}async function z({pg:t,metadataSchema:n}){await t.exec(`
+      SET ${n}.syncing = false;
+      CREATE SCHEMA IF NOT EXISTS "${n}";
+      CREATE TABLE IF NOT EXISTS ${B(n)} (
+        key TEXT PRIMARY KEY,
+        shape_metadata JSONB NOT NULL,
+        last_lsn TEXT NOT NULL
+      );
+    `)}function B(t){return`"${t}"."${pe}"`}async function Z({pg:t,table:n,schema:e="public",message:a,mapColumns:r,primaryKey:b,debug:m}){let f=r?U(r,a):a.value;switch(a.headers.operation){case"insert":{m&&console.log("inserting",f);let g=Object.keys(f);return await t.query(`
+            INSERT INTO "${e}"."${n}"
+            (${g.map(o=>'"'+o+'"').join(", ")})
+            VALUES
+            (${g.map((o,y)=>"$"+(y+1)).join(", ")})
+          `,g.map(o=>f[o]))}case"update":{m&&console.log("updating",f);let g=Object.keys(f).filter(o=>!b.includes(o));return g.length===0?void 0:await t.query(`
+            UPDATE "${e}"."${n}"
+            SET ${g.map((o,y)=>'"'+o+'" = $'+(y+1)).join(", ")}
+            WHERE ${b.map((o,y)=>'"'+o+'" = $'+(g.length+y+1)).join(" AND ")}
+          `,[...g.map(o=>f[o]),...b.map(o=>f[o])])}case"delete":return m&&console.log("deleting",f),await t.query(`
+            DELETE FROM "${e}"."${n}"
+            WHERE ${b.map((g,o)=>'"'+g+'" = $'+(o+1)).join(" AND ")}
+          `,[...b.map(g=>f[g])])}}async function K({pg:t,table:n,schema:e="public",messages:a,mapColumns:r,debug:b}){let m=a.map(s=>r?U(r,s):s.value);b&&console.log("inserting",m);let f=Object.keys(m[0]),g=s=>{if(s===null)return 0;if(s instanceof ArrayBuffer)return s.byteLength;if(s instanceof Blob)return s.size;if(s instanceof Uint8Array||s instanceof DataView||ArrayBuffer.isView(s))return s.byteLength;switch(typeof s){case"string":return s.length;case"number":return 8;case"boolean":return 1;default:return s instanceof Date?8:s?.toString()?.length||0}},o=s=>f.reduce((d,E)=>{let p=s[E];if(p===null)return d;if(Array.isArray(p)){if(p.length===0)return d;let _=p[0];switch(typeof _){case"number":return d+p.length*8;case"string":return d+p.reduce((j,$)=>j+$.length,0);case"boolean":return d+p.length;default:return _ instanceof Date?d+p.length*8:d+p.reduce((j,$)=>j+g($),0)}}return d+g(p)},0),y=32e3,I=50*1024*1024,O=async s=>{let d=`
+      INSERT INTO "${e}"."${n}"
+      (${f.map(p=>`"${p}"`).join(", ")})
+      VALUES
+      ${s.map((p,_)=>`(${f.map((j,$)=>"$"+(_*f.length+$+1)).join(", ")})`).join(", ")}
+    `,E=s.flatMap(p=>f.map(_=>p[_]));await t.query(d,E)},l=[],h=0,P=0;for(let s=0;s<m.length;s++){let d=m[s],E=o(d),p=f.length;l.length>0&&(h+E>I||P+p>y)&&(b&&h+E>I&&console.log("batch size limit exceeded, executing batch"),b&&P+p>y&&console.log("batch params limit exceeded, executing batch"),await O(l),l=[],h=0,P=0),l.push(d),h+=E,P+=p}l.length>0&&await O(l),b&&console.log(`Inserted ${a.length} rows using INSERT`)}async function ee({pg:t,table:n,schema:e="public",messages:a,mapColumns:r,debug:b}){b&&console.log("applying messages with json_to_recordset");let m=a.map(o=>r?U(r,o):o.value),f=(await t.query(`
+        SELECT column_name, udt_name, data_type
+        FROM information_schema.columns
+        WHERE table_name = $1 AND table_schema = $2
+      `,[n,e])).rows.filter(o=>Object.prototype.hasOwnProperty.call(m[0],o.column_name)),g=1e4;for(let o=0;o<m.length;o+=g){let y=m.slice(o,o+g);await t.query(`
+        INSERT INTO "${e}"."${n}"
+        SELECT x.* from json_to_recordset($1) as x(${f.map(I=>`${I.column_name} ${I.udt_name.replace(/^_/,"")}`+(I.data_type==="ARRAY"?"[]":"")).join(", ")})
+      `,[y])}b&&console.log(`Inserted ${a.length} rows using json_to_recordset`)}async function W({pg:t,table:n,schema:e="public",messages:a,mapColumns:r,debug:b}){b&&console.log("applying messages with COPY");let m=a.map(y=>r?U(r,y):y.value),f=Object.keys(m[0]),g=m.map(y=>f.map(I=>{let O=y[I];return typeof O=="string"&&(O.includes(",")||O.includes('"')||O.includes(`
+`))?`"${O.replace(/"/g,'""')}"`:O===null?"\\N":O}).join(",")).join(`
+`),o=new Blob([g],{type:"text/csv"});await t.query(`
+      COPY "${e}"."${n}" (${f.map(y=>`"${y}"`).join(", ")})
+      FROM '/dev/blob'
+      WITH (FORMAT csv, NULL '\\N')
+    `,[],{blob:o}),b&&console.log(`Inserted ${a.length} rows using COPY`)}function U(t,n){if(typeof t=="function")return t(n);let e={};for(let[a,r]of Object.entries(t))e[a]=n.value[r];return e}async function ue(t,n){let e=n?.debug??!1,a=n?.metadataSchema??"electric",r=[],b=new Map,m=!1,f=async()=>{m||(m=!0,await z({pg:t,metadataSchema:a}))},g=async({key:l,shapes:h,useCopy:P=!1,initialInsertMethod:s="insert",onInitialSync:d})=>{let E=!1;await f(),Object.values(h).filter(i=>!i.onMustRefetch).forEach(i=>{if(b.has(i.table))throw new Error("Already syncing shape for table "+i.table);b.set(i.table)});let p=null;l!==null&&(p=await V({pg:t,metadataSchema:a,subscriptionKey:l}),e&&p&&console.log("resuming from subscription state",p));let _=p===null;P&&s==="insert"&&(s="csv",console.warn("The useCopy option is deprecated and will be removed in a future version. Use initialInsertMethod instead."));let j=!_||s==="insert",$=!1,q=new Map(Object.keys(h).map(i=>[i,new Map])),k=new Map(Object.keys(h).map(i=>[i,BigInt(-1)])),x=new Set,X=p?.last_lsn??BigInt(-1),D=new AbortController;Object.values(h).filter(i=>!!i.shape.signal).forEach(i=>{i.shape.signal.addEventListener("abort",()=>D.abort(),{once:!0})});let R=new te.MultiShapeStream({shapes:Object.fromEntries(Object.entries(h).map(([i,L])=>{let S=p?.shape_metadata[i];return[i,{...L.shape,...S?{offset:S.offset,handle:S.handle}:{},signal:D.signal}]}))}),ne={json:ee,csv:W,useCopy:W,insert:K},se=async i=>{let L=new Map(Object.keys(h).map(S=>[S,[]]));for(let[S,w]of q.entries()){let c=L.get(S);for(let u of w.keys())if(u<=i){for(let T of w.get(u))c.push(T);w.delete(u)}}await t.transaction(async S=>{e&&console.time("commit"),await S.exec(`SET LOCAL ${a}.syncing = true;`);for(let[w,c]of L.entries()){let u=h[w],T=c;if(x.has(w)){if(e&&console.log("truncating table",u.table),u.onMustRefetch)await u.onMustRefetch(S);else{let M=u.schema||"public";await S.exec(`DELETE FROM "${M}"."${u.table}";`)}x.delete(w)}if(!j){let M=[],N=[],Y=!1;for(let G of T)!Y&&G.headers.operation==="insert"?M.push(G):(Y=!0,N.push(G));M.length>0&&s==="csv"&&N.unshift(M.pop()),T=N,M.length>0&&(await ne[s]({pg:S,table:u.table,schema:u.schema,messages:M,mapColumns:u.mapColumns,debug:e}),j=!0)}let C=[],A=null,H=T.length;for(let M=0;M<H;M++){let N=T[M];N.headers.operation==="insert"?C.push(N):A=N,(A||M===H-1)&&(C.length>0&&(await K({pg:S,table:u.table,schema:u.schema,messages:C,mapColumns:u.mapColumns,debug:e}),C.length=0),A&&(await Z({pg:S,table:u.table,schema:u.schema,message:A,mapColumns:u.mapColumns,primaryKey:u.primaryKey,debug:e}),A=null))}}l&&await J({pg:S,metadataSchema:a,subscriptionKey:l,shapeMetadata:Object.fromEntries(Object.keys(h).map(w=>[w,{handle:R.shapes[w].shapeHandle,offset:R.shapes[w].lastOffset}])),lastLsn:i,debug:e}),E&&await S.rollback()}),e&&console.timeEnd("commit"),d&&!$&&R.isUpToDate&&(d(),$=!0)};return R.subscribe(async i=>{if(E)return;e&&console.log("received messages",i.length),i.forEach(c=>{let u=k.get(c.shape)??BigInt(-1);if((0,v.isChangeMessage)(c)){let T=q.get(c.shape),C=typeof c.headers.lsn=="string"?BigInt(c.headers.lsn):BigInt(0);if(C<=u)return;let A=c.headers.last??!1;T.has(C)||T.set(C,[]),T.get(C).push(c),A&&k.set(c.shape,C)}else if((0,v.isControlMessage)(c))switch(c.headers.control){case"up-to-date":{if(e&&console.log("received up-to-date",c),typeof c.headers.global_last_seen_lsn!="string")throw new Error("global_last_seen_lsn is not a string");let T=BigInt(c.headers.global_last_seen_lsn);if(T<=u)return;k.set(c.shape,T);break}case"must-refetch":{e&&console.log("received must-refetch",c),q.get(c.shape).clear(),k.set(c.shape,BigInt(-1)),x.add(c.shape);break}}});let L=Array.from(k.values()).reduce((c,u)=>u<c?u:c),S=L>X,w=L>=X&&x.size>0;(S||w)&&(se(L),await new Promise(c=>setTimeout(c)))}),r.push({stream:R,aborter:D}),{unsubscribe:()=>{e&&console.log("unsubscribing"),E=!0,R.unsubscribeAll(),D.abort();for(let i of Object.values(h))b.delete(i.table)},get isUpToDate(){return R.isUpToDate},streams:Object.fromEntries(Object.keys(h).map(i=>[i,R.shapes[i]]))}};return{namespaceObj:{initMetadataTables:f,syncShapesToTables:g,syncShapeToTable:async l=>{let h=await g({shapes:{shape:{shape:l.shape,table:l.table,schema:l.schema,mapColumns:l.mapColumns,primaryKey:l.primaryKey,onMustRefetch:l.onMustRefetch}},key:l.shapeKey,useCopy:l.useCopy,initialInsertMethod:l.initialInsertMethod,onInitialSync:l.onInitialSync});return{unsubscribe:h.unsubscribe,get isUpToDate(){return h.isUpToDate},stream:h.streams.shape}},deleteSubscription:async l=>{await Q({pg:t,metadataSchema:a,subscriptionKey:l})}},close:async()=>{for(let{stream:l,aborter:h}of r)l.unsubscribeAll(),h.abort()}}}function fe(t){return{name:"ElectricSQL Sync",setup:async n=>{let{namespaceObj:e,close:a}=await ue(n,t);return{namespaceObj:e,close:a}}}}0&&(module.exports={electricSync});
+//# sourceMappingURL=index.cjs.map
