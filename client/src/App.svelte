@@ -12,9 +12,9 @@
   import EncryptionSetup from '$lib/EncryptionSetup.svelte';
   import EncryptionTest from '$lib/EncryptionTest.svelte';
   import { initLocalDb }    from '$lib/db/pglite';
-  import { createMap, addPin, getPins, getMap } from '$lib/api';
+  import { createMap, addPin, updatePin, getPins, getMap } from '$lib/api';
   import type { Map as GLMap }  from 'maplibre-gl';
-  import type { PinData, MapRow, PinType } from '$lib/models';
+  import type { PinData, MapRow, PinType, PinRow } from '$lib/models';
 
   let db: any;
   let mapId = '';
@@ -27,6 +27,9 @@
   let showFilter = false;
   let showPanicWipe = false;
   let showEncryptionSetup = false;
+  let editMode = false;
+  let editPinId: string | null = null;
+  let editPinData: Partial<PinData> | null = null;
 
   // OpenStreetMap raster style
   const osmStyle = {
@@ -231,6 +234,44 @@
     showCreatePin = false;
     showQuickPin = false;
     pinLocation = null;
+    editMode = false;
+    editPinId = null;
+    editPinData = null;
+  }
+
+  async function handlePinUpdate(event: CustomEvent<{ pinId: string; updates: Partial<PinData> }>) {
+    const { pinId, updates } = event.detail;
+    
+    try {
+      await updatePin(db, pinId, updates);
+      console.log('Pin updated successfully');
+      
+      // Close the edit modal
+      showCreatePin = false;
+      editMode = false;
+      editPinId = null;
+      editPinData = null;
+      pinLocation = null;
+    } catch (error) {
+      console.error('Failed to update pin:', error);
+    }
+  }
+
+  // Make edit function available globally for PinLayer
+  if (typeof window !== 'undefined') {
+    (window as any).editPin = async (pin: PinRow) => {
+      editMode = true;
+      editPinId = pin.id;
+      editPinData = {
+        type: pin.type || undefined,
+        description: pin.description || undefined,
+        tags: pin.tags || [],
+        photo_urls: pin.photo_urls || [],
+      };
+      pinLocation = { lat: Number(pin.lat), lng: Number(pin.lng) };
+      showCreatePin = true;
+      showQuickPin = false;
+    };
   }
 
   function handlePanicWipeComplete() {
@@ -552,7 +593,11 @@
           lat={pinLocation.lat}
           lng={pinLocation.lng}
           open={showCreatePin}
+          mode={editMode ? 'edit' : 'create'}
+          pinId={editPinId}
+          initialData={editPinData}
           on:create={handlePinCreate}
+          on:update={handlePinUpdate}
           on:cancel={handlePinCancel}
         />
       {/if}

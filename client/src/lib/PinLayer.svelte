@@ -267,7 +267,7 @@
       // Photos
       const photoUrls = Array.isArray(pin.photo_urls) ? pin.photo_urls : [];
       if (photoUrls.length > 0) {
-        popupContent += `<div class="pin-photos">`;
+        popupContent += `<div class=\"pin-photos\">`;
         photoUrls.slice(0, 3).forEach((url: string, index: number) => {
           const thumbUrl = getThumbnailUrl(url, 150);
           popupContent += `<img src="${thumbUrl}" alt="Photo ${index + 1}" class="pin-photo-thumb" onclick="window.open('${url}', '_blank')" />`;
@@ -277,6 +277,11 @@
         }
         popupContent += `</div>`;
       }
+      
+      // Edit button
+      popupContent += `<div class="pin-actions">`;
+      popupContent += `<button class="edit-pin-btn" onclick="window.editPin(${JSON.stringify(pin).replace(/"/g, '&quot;')})">✏️ Edit</button>`;
+      popupContent += `</div>`;
       
       // Timestamp
       if (pin.created_at) {
@@ -503,6 +508,29 @@
     padding: 4px;
     background: #f5f5f5;
     border-radius: 4px;
+  }
+
+  :global(.pin-actions) {
+    margin: 12px 0 8px 0;
+    display: flex;
+    gap: 8px;
+  }
+
+  :global(.edit-pin-btn) {
+    flex: 1;
+    padding: 8px 12px;
+    background: #4a90e2;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.2s;
+  }
+
+  :global(.edit-pin-btn:hover) {
+    background: #357abd;
   }
 </style>
 ```

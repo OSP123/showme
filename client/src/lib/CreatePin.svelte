@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import type { PinType, PinData } from './models';
   import PhotoUpload from './PhotoUpload.svelte';
   import type { UploadResult } from './imageUpload';
@@ -8,9 +8,13 @@
   export let lat: number;
   export let lng: number;
   export let open = false;
+  export let mode: 'create' | 'edit' = 'create';
+  export let pinId: string | null = null;
+  export let initialData: Partial<PinData> | null = null;
 
   const dispatch = createEventDispatcher<{
     create: PinData;
+    update: { pinId: string; updates: Partial<PinData> };
     cancel: void;
   }>();
 
@@ -20,6 +24,16 @@
   let tagInput = '';
   let photoUrls: string[] = [];
   let uploadError = '';
+
+  // Pre-populate form in edit mode
+  onMount(() => {
+    if (mode === 'edit' && initialData) {
+      selectedType = initialData.type || 'other';
+      description = initialData.description || '';
+      tags = (initialData.tags || []).filter(t => t !== initialData.type); // Remove type from tags
+      photoUrls = initialData.photo_urls || [];
+    }
+  });
 
   const pinTypes: { value: PinType; label: string; emoji: string }[] = [
     { value: 'medical', label: 'Medical', emoji: '🏥' },
@@ -65,14 +79,29 @@
   }
 
   function submit() {
-    dispatch('create', {
-      lat,
-      lng,
-      type: selectedType,
-      description: description.trim() || undefined,
-      tags: tags.length > 0 ? tags : undefined,
-      photo_urls: photoUrls.length > 0 ? photoUrls : undefined,
-    });
+    if (mode === 'edit' && pinId) {
+      // Edit mode - only send changed fields
+      dispatch('update', {
+        pinId,
+        updates: {
+          type: selectedType,
+          description: description.trim() || undefined,
+          tags: tags.length > 0 ? tags : undefined,
+          photo_urls: photoUrls.length > 0 ? photoUrls : undefined,
+        }
+      });
+    } else {
+      // Create mode
+      dispatch('create', {
+        lat,
+        lng,
+        type: selectedType,
+        description: description.trim() || undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        photo_urls: photoUrls.length > 0 ? photoUrls : undefined,
+      });
+    }
+    
     // Reset form
     selectedType = 'other';
     description = '';
@@ -97,7 +126,7 @@
 {#if open}
   <div class="modal-overlay" on:click={cancel} on:keydown={(e) => e.key === 'Escape' && cancel()}>
     <div class="modal-content" on:click|stopPropagation>
-      <h2>Add Pin</h2>
+      <h2>{mode === 'edit' ? 'Edit Pin' : 'Add Pin'}</h2>
       
       <div class="form-group">
         <label>Type</label>
@@ -188,7 +217,7 @@
           Cancel
         </button>
         <button type="button" class="btn-primary" on:click={submit}>
-          Add Pin
+          {mode === 'edit' ? 'Save Changes' : 'Add Pin'}
         </button>
       </div>
     </div>
