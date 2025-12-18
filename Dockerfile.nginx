@@ -1,11 +1,15 @@
 FROM nginx:1.29-alpine
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx configuration template
+COPY nginx-render.conf /etc/nginx/templates/default.conf.template
+
+# Set default ELECTRIC_URL for local development
+ENV ELECTRIC_URL=http://electric:3000
 
 # Expose HTTP port
 EXPOSE 80
 
-# Nginx will proxy to ElectricSQL service
-# ELECTRIC_URL is set via environment variable and referenced in nginx.conf
+# Nginx will automatically substitute environment variables in templates
+# and then start nginx
+# The /docker-entrypoint.d/20-envsubst-on-templates.sh script handles this
 CMD ["nginx", "-g", "daemon off;"]
