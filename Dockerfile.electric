@@ -6,4 +6,4 @@ ENV ELECTRIC_USE_IPV6=false
 
 EXPOSE 3000
 
-CMD ["electric"]
+CMD ["start"]
