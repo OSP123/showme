@@ -1,0 +1,11 @@
+FROM nginx:1.29-alpine
+
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose HTTP port
+EXPOSE 80
+
+# Nginx will proxy to ElectricSQL service
+# ELECTRIC_URL is set via environment variable and referenced in nginx.conf
+CMD ["nginx", "-g", "daemon off;"]
