@@ -1,38 +1,19 @@
+databases:
+  - name: showme-db
+    plan: free
+    databaseName: showme
+    user: showme
+    region: oregon
+    postgresMajorVersion: 17
+    # PostGIS extension will be enabled via dashboard after creation
+
 services:
-  # ShowMe Web Client
-  - type: web
-    name: showme-client
-    env: node
-    region: oregon
-    plan: starter
-    buildCommand: cd client && npm install && npm run build
-    startCommand: cd client && npm run preview -- --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: VITE_ELECTRIC_SHAPE_URL
-        sync: false
-      - key: VITE_ELECTRIC_SOURCE_ID
-        sync: false
-      - key: VITE_ELECTRIC_SECRET
-        sync: false
-      - key: VITE_POSTGREST_URL
-        sync: false
-    
-  # PostgreSQL Database
-  - type: pserv
-    name: showme-db
-    env: docker
-    region: oregon
-    plan: starter
-    dockerfilePath: ./Dockerfile.postgres
-    
   # ElectricSQL Sync Service
   - type: web
     name: showme-electric
     env: docker
     region: oregon
-    plan: starter
+    plan: free
     dockerfilePath: ./Dockerfile.electric
     envVars:
       - key: DATABASE_URL
@@ -43,3 +24,56 @@ services:
         value: logical_replication
       - key: AUTH_MODE
         value: insecure
+      - key: ELECTRIC_USE_IPV6
+        value: false
+    healthCheckPath: /
+  
+  # PostgREST HTTP API
+  - type: web
+    name: showme-postgrest
+    env: docker
+    region: oregon
+    plan: free
+    dockerfilePath: ./Dockerfile.postgrest
+    envVars:
+      - key: PGRST_DB_URI
+        fromDatabase:
+          name: showme-db
+          property: connectionString
+      - key: PGRST_DB_SCHEMAS
+        value: public
+      - key: PGRST_DB_ANON_ROLE
+        value: showme
+      - key: PGRST_OPENAPI_SERVER_PROXY_URI
+        sync: false  # Set manually after deployment
+  
+  # Nginx Reverse Proxy (exposes ElectricSQL with proper CORS)
+  - type: web
+    name: showme-nginx
+    env: docker
+    region: oregon
+    plan: free
+    dockerfilePath: ./Dockerfile.nginx
+    envVars:
+      - key: ELECTRIC_URL
+        sync: false  # Set to showme-electric URL after deployment
+  
+  # Frontend Static Site
+  - type: web
+    name: showme-client
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: cd client && npm install && npm run build
+    startCommand: cd client && npx sirv-cli dist --host 0.0.0.0 --port $PORT --single
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_ELECTRIC_SHAPE_URL
+        sync: false  # Set to showme-nginx URL after deployment (https://showme-nginx.onrender.com/v1/shape)
+      - key: VITE_POSTGREST_URL
+        sync: false  # Set to showme-postgrest URL after deployment (https://showme-postgrest.onrender.com)
+      - key: VITE_CLOUDINARY_CLOUD_NAME
+        sync: false  # Optional: Your Cloudinary cloud name
+      - key: VITE_CLOUDINARY_UPLOAD_PRESET
+        sync: false  # Optional: Your Cloudinary upload preset
