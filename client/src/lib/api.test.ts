@@ -241,7 +241,6 @@ describe('API Functions', () => {
       expect(mockDb.query).toHaveBeenCalledWith(
         expect.stringContaining('expires_at IS NULL OR expires_at >'),
         expect.arrayContaining(['test-map-id', expect.any(String)])
-          expect.arrayContaining(['test-map-id', expect.any(String)])
       );
     });
 

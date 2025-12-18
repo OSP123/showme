@@ -44,33 +44,126 @@ Fly.io offers a genuinely free tier with 3 shared VMs that stay running.
 
 ---
 
-### Option 2: Render.com (Free but Sleeps)
+### Option 2: Render.com (Easy Deployment with Blueprint)
 
 Render has a free tier, but services sleep after 15 minutes of inactivity (slow first request after sleep).
 
-#### Steps:
+> **⚠️ Free Tier Note**: Free services sleep after 15 minutes of inactivity. First request after sleep takes 30-60 seconds. For always-on services, upgrade to Starter plan ($7/month per service).
 
-1. **Sign up at [render.com](https://render.com)**
+#### Prerequisites
 
-2. **Option A: Use Render CLI**:
-   ```bash
-   npm install -g render-cli
-   render login
-   render deploy
-   ```
+1. **GitHub Account** - Render connects to GitHub repositories
+2. **Render Account** - Sign up at [render.com](https://render.com)
 
-3. **Option B: GitHub Mirror + Web UI**:
-   - Push your Codeberg repo to GitHub (create a mirror)
-   - In Render dashboard: New → Blueprint
-   - Connect GitHub repository
-   - Render will detect `compose.yaml`
+#### Step-by-Step Deployment
 
-4. **Configure services**:
-   - Render will create services for each container
-   - Set environment variables in each service
-   - Free tier: Services sleep after 15 min (slow first request)
+**1. Push Code to GitHub**
 
-**Note**: Free but services sleep. First request after sleep takes 30-60 seconds.
+```bash
+# If you haven't already, create a GitHub repo and push your code
+git remote add origin https://github.com/yourusername/showme.git
+git push -u origin main
+```
+
+**2. Create Render Account**
+
+- Go to [render.com](https://render.com)
+- Sign up with GitHub
+- Authorize Render to access your repositories
+
+**3. Deploy Using Blueprint**
+
+- In Render Dashboard, click **New** → **Blueprint**
+- Connect your GitHub repository
+- Render will detect `render-blueprint.yaml`
+- Click **Apply**
+
+Render will create:
+- `showme-db` - PostgreSQL database (free tier, 1GB)
+- `showme-electric` - ElectricSQL sync service
+- `showme-postgrest` - PostgREST HTTP API
+- `showme-nginx` - Nginx reverse proxy
+- `showme-client` - Frontend static site
+
+**4. Enable PostGIS Extension**
+
+After database is created:
+- Go to `showme-db` in Render dashboard
+- Click **Info** tab
+- Under **Connection**, click **Connect** → **External Connection**
+- Use any PostgreSQL client or the web shell
+- Run: `CREATE EXTENSION IF NOT EXISTS postgis;`
+
+**5. Run Database Migrations**
+
+In Render dashboard:
+- Go to `showme-db` → **Shell** tab
+- Copy and paste the contents of `migrations/20_create_tables.sql`
+- Copy and paste the contents of `migrations/21_add_phase3_features.sql`
+
+Or use the external connection:
+```bash
+# Get the external connection URL from Render dashboard
+psql <external-database-url>
+
+# Then run:
+\i migrations/20_create_tables.sql
+\i migrations/21_add_phase3_features.sql
+```
+
+**6. Configure Environment Variables**
+
+After deployment, set these environment variables in each service:
+
+**showme-nginx:**
+- `ELECTRIC_URL` = `https://showme-electric.onrender.com` (or your actual electric service URL)
+
+**showme-postgrest:**
+- `PGRST_OPENAPI_SERVER_PROXY_URI` = `https://showme-postgrest.onrender.com`
+
+**showme-client:**
+- `VITE_ELECTRIC_SHAPE_URL` = `https://showme-nginx.onrender.com/v1/shape`
+- `VITE_POSTGREST_URL` = `https://showme-postgrest.onrender.com`
+- `VITE_CLOUDINARY_CLOUD_NAME` = (optional, your Cloudinary cloud name)
+- `VITE_CLOUDINARY_UPLOAD_PRESET` = (optional, your Cloudinary upload preset)
+
+**7. Trigger Redeployment**
+
+After setting environment variables:
+- Go to each service
+- Click **Manual Deploy** → **Deploy latest commit**
+- Wait for all services to show "Live" status
+
+**8. Test Your Deployment**
+
+Visit `https://showme-client.onrender.com` and:
+- Create a test map
+- Add a pin using Quick Pin
+- Open the same map in another browser tab
+- Verify real-time sync works
+
+#### Troubleshooting
+
+**Services won't start:**
+- Check logs in each service's **Logs** tab
+- Verify all environment variables are set correctly
+- Ensure database connection is successful
+
+**CORS errors:**
+- Verify `VITE_ELECTRIC_SHAPE_URL` points to nginx service (not electric directly)
+- Check nginx logs for proxy errors
+
+**Sync not working:**
+- Verify ElectricSQL service is running
+- Check that PostGIS extension is enabled
+- Verify database migrations ran successfully
+
+**Database connection failed:**
+- Ensure `DATABASE_URL` environment variable is connected to `showme-db`
+- Check database is in "Available" status
+- Verify PostgreSQL version is 17
+
+
 
 ---
 

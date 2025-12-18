@@ -73,8 +73,7 @@ describe('Image Upload', () => {
             expect(result).toEqual({
                 url: 'https://res.cloudinary.com/test/image/upload/v1/test.jpg',
                 publicId: 'test',
-                width: 800,
-                height: 600
+                thumbnail: expect.stringContaining('w_200,h_200')
             });
 
             expect(global.fetch).toHaveBeenCalledWith(
@@ -91,7 +90,10 @@ describe('Image Upload', () => {
 
         it('should throw error if Cloudinary not configured', async () => {
             const originalEnv = import.meta.env;
-            (import.meta as any).env = {};
+            (import.meta as any).env = {
+                VITE_CLOUDINARY_CLOUD_NAME: undefined,
+                VITE_CLOUDINARY_UPLOAD_PRESET: undefined
+            };
 
             const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
 
@@ -111,7 +113,8 @@ describe('Image Upload', () => {
 
             (global.fetch as any).mockResolvedValueOnce({
                 ok: false,
-                statusText: 'Upload failed'
+                statusText: 'Upload failed',
+                text: async () => 'Upload error details'
             });
 
             const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
