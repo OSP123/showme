@@ -1,0 +1,13 @@
+FROM postgres:17
+
+WORKDIR /migrations
+
+# Copy migration files
+COPY migrations/*.sql ./
+
+# This script will run inside Railway and can access internal DB
+COPY setup-db.sh ./
+
+RUN chmod +x setup-db.sh
+
+CMD ["./setup-db.sh"]
