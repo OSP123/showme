@@ -1,9 +1,18 @@
 FROM electricsql/electric:latest
 
+# Install PostgreSQL client
+RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
+
+# Copy setup script and migrations
+COPY setup-db.sh /setup-db.sh
+COPY migrations/*.sql /migrations/
+
 ENV ELECTRIC_WRITE_TO_PG_MODE=logical_replication
 ENV AUTH_MODE=insecure
 ENV ELECTRIC_USE_IPV6=false
+ENV ELECTRIC_INSECURE=true
 
 EXPOSE 3000
 
-CMD ["start"]
+# Run database setup then start Electric
+CMD ["/bin/sh", "-c", "/setup-db.sh && start"]
