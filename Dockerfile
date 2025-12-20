@@ -1,16 +1,12 @@
 # Build stage
 FROM docker.io/node:22-slim AS build
 
-RUN set -ex \
-    && apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install \
-    -y --no-install-recommends \
 WORKDIR /app
 
 # Copy package files
-COPY client/package*.json client/pnpm-lock.yaml ./
+COPY client/package*.json client/pnpm-lock.yaml* ./
 
-# Install dependencies
+# Install pnpm and dependencies
 RUN npm install -g pnpm && pnpm install --frozen-lockfile
 
 # Copy application code
