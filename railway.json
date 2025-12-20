@@ -1,4 +1,3 @@
-```json
 {
     "$schema": "https://railway.app/railway.schema.json",
     "build": {
@@ -12,4 +11,3 @@
         "restartPolicyMaxRetries": 10
     }
 }
-```
