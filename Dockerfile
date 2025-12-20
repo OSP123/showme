@@ -35,4 +35,3 @@ ENV PORT=3000
 
 # Serve static files with sirv (SPA mode with --single flag)
 CMD sirv-cli dist --host 0.0.0.0 --port $PORT --single
-```
