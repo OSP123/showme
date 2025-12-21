@@ -107,41 +107,37 @@ export async function createMap(
   const access_token = is_private ? crypto.randomUUID() : null;
   const now = new Date().toISOString();
 
-  // NEW: Try to save to PostgreSQL first for ElectricSQL sync
+  // NEW: Save to PostgreSQL via backend API for ElectricSQL sync
   try {
-    console.log('🔄 Saving map to PostgreSQL for real-time sync...');
-    const success = await saveToPostgres('maps', {
-      id,
-      name,
-      is_private,
-      access_token,
-      created_at: now
-    });
-
-    if (success) {
-      console.log('✅ Map saved to PostgreSQL - will sync via ElectricSQL');
-
-      // Clear panic wipe flag when user creates a new map (they're using the app again)
-      // This allows polling to resume for the new map
-      if (typeof window !== 'undefined' && localStorage.getItem('__panicWipeActive') === 'true') {
-        localStorage.removeItem('__panicWipeActive');
-        (window as any).__panicWipeActive = false;
-        console.log('✅ Panic wipe flag cleared - user created new map, polling will resume');
-      }
-    } else {
-      console.warn('⚠️ Failed to save map to PostgreSQL, queueing for retry...');
-      // Queue for retry when online
-      await operationQueue.enqueue('createMap', {
+    console.log('🔄 Saving map to PostgreSQL via API for real-time sync...');
+    const response = await fetch('/api/maps', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         id,
         name,
         is_private,
         access_token,
+        fuzzing_enabled: false,
+        fuzzing_radius: 100,
         created_at: now
-      });
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    console.log('✅ Map saved to PostgreSQL - will sync via ElectricSQL');
+
+    // Clear panic wipe flag when user creates a new map
+    if (typeof window !== 'undefined' && localStorage.getItem('__panicWipeActive') === 'true') {
+      localStorage.removeItem('__panicWipeActive');
+      (window as any).__panicWipeActive = false;
+      console.log('✅ Panic wipe flag cleared - user created new map, polling will resume');
     }
   } catch (error) {
-    console.warn('⚠️ Failed to save map to PostgreSQL, queueing for retry:', error);
-    // Queue for retry when online
+    console.warn('⚠️ Failed to save map to PostgreSQL via API, queueing for retry:', error);
     await operationQueue.enqueue('createMap', {
       id,
       name,
@@ -328,113 +324,51 @@ export async function addPin(
   // The flag prevents fetching OLD pins from PostgREST, but allows NEW pins to be created locally
   // This way, deleted pins stay deleted, but new pins work normally
 
-  // Write to PostgREST so pin appears on server for other clients
-  // PostgREST expects TEXT[] arrays as JSON arrays (not strings)
+  //Write to PostgreSQL via new API
   try {
-    // Build PostgREST payload
-    const postgresData: any = {
+    const response = await fetch('/api/pins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id,
+        map_id: data.map_id,
+        lat: finalLat,
+        lng: finalLng,
+        type: data.type || null,
+        tags: tagsArray,
+        description: data.description || null,
+        photo_urls: data.photo_urls || [],
+        expires_at: expiresAt,
+        created_at: now,
+        updated_at: now
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+
+    console.log('✅ Pin saved to PostgreSQL - will sync to other clients');
+    // Trigger immediate UI update
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('db-change', {
+        detail: { table: 'pins', data: { id, map_id: data.map_id } }
+      }));
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to save pin to PostgreSQL via API, queueing for retry:', error);
+    await operationQueue.enqueue('addPin', {
       id,
       map_id: data.map_id,
       lat: finalLat,
       lng: finalLng,
+      type: data.type || null,
+      tags: tagsArray,
       description: data.description || null,
+      photo_urls: data.photo_urls || [],
       created_at: now,
-      updated_at: now,
-      tags: tagsArray.length > 0 ? tagsArray : [],
-      photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
-    };
-
-    // Only add Phase 3 fields if they have values
-    // saveToPostgres will automatically retry without them if columns don't exist
-    if (data.type) {
-      postgresData.type = data.type;
-    }
-    if (expiresAt) {
-      postgresData.expires_at = expiresAt;
-    }
-
-    // Ensure map exists in PostgREST before saving pin (fixes foreign key errors after panic wipe)
-    const mapExists = await ensureMapExistsInPostgres(db, data.map_id);
-    if (!mapExists) {
-      console.warn('⚠️ Map does not exist in PostgreSQL, queueing pin for retry after map sync...');
-      const queuedData: any = {
-        id,
-        map_id: data.map_id,
-        lat: finalLat,
-        lng: finalLng,
-        description: data.description || null,
-        created_at: now,
-        updated_at: now,
-        tags: tagsArray.length > 0 ? tagsArray : [],
-        photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
-      };
-      await operationQueue.enqueue('addPin', queuedData);
-      return { id };
-    }
-
-    // Try to save directly - saveToPostgres handles column errors with fallback
-    const success = await saveToPostgres('pins', postgresData);
-
-    if (success) {
-      console.log('✅ Pin saved to PostgreSQL - will sync to other clients');
-      // Trigger immediate UI update
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('db-change', {
-          detail: { table: 'pins', data: { id, map_id: data.map_id } }
-        }));
-      }
-    } else {
-      console.warn('⚠️ Failed to save pin to PostgreSQL, queueing for retry...');
-      // Remove Phase 3 fields for queue (backward compatibility)
-      const queuedData = { ...postgresData };
-      delete queuedData.type;
-      delete queuedData.expires_at;
-      await operationQueue.enqueue('addPin', queuedData);
-    }
-  } catch (error: any) {
-    const errorMsg = error?.message || String(error);
-    // Check if it's a foreign key constraint error
-    if (errorMsg.includes('foreign key constraint') || errorMsg.includes('23503')) {
-      console.warn('⚠️ Map does not exist in PostgreSQL, queueing pin for retry after map sync...');
-      const postgresData: any = {
-        id,
-        map_id: data.map_id,
-        lat: finalLat,
-        lng: finalLng,
-        description: data.description || null,
-        created_at: now,
-        updated_at: now,
-        tags: tagsArray.length > 0 ? tagsArray : [],
-        photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
-      };
-      if (data.type) {
-        postgresData.type = data.type;
-      }
-      if (expiresAt) {
-        postgresData.expires_at = expiresAt;
-      }
-      await operationQueue.enqueue('addPin', postgresData);
-    } else {
-      console.warn('⚠️ Failed to save pin to PostgreSQL, queueing for retry:', error);
-      const postgresData: any = {
-        id,
-        map_id: data.map_id,
-        lat: finalLat,
-        lng: finalLng,
-        description: data.description || null,
-        created_at: now,
-        updated_at: now,
-        tags: tagsArray.length > 0 ? tagsArray : [],
-        photo_urls: (data.photo_urls && data.photo_urls.length > 0) ? data.photo_urls : [],
-      };
-      if (data.type) {
-        postgresData.type = data.type;
-      }
-      if (expiresAt) {
-        postgresData.expires_at = expiresAt;
-      }
-      await operationQueue.enqueue('addPin', postgresData);
-    }
+      updated_at: now
+    });
   }
 
   return { id };
