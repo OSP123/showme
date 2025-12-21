@@ -102,38 +102,49 @@ export function initLocalDb(): Promise<PGlite> {
       pinsSyncParams.secret = SOURCE_SECRET;
     }
 
-    console.log('🔄 Setting up sync for maps and pins...');
+    console.log('🔄 Setting up Electric v2 multi-table sync...');
 
     // Don't setup ElectricSQL sync if panic wipe is active
     if ((window as any).__panicWipeActive || localStorage.getItem('__panicWipeActive') === 'true') {
       console.log('⏸️ Skipping ElectricSQL sync setup - panic wipe is active');
     } else {
       try {
-        // Sync maps table
-        await pdb.electric.syncShapeToTable({
-          shape: {
-            url: SHAPE_URL,
-            params: mapsSyncParams
+        // Electric v2: Use syncShapesToTables for transactional consistency
+        // Changes to maps and pins in same Postgres transaction sync atomically
+        const sync = await pdb.electric.syncShapesToTables({
+          shapes: {
+            maps: {
+              shape: {
+                url: SHAPE_URL,
+                params: mapsSyncParams
+              },
+              table: 'maps',
+              primaryKey: ['id']
+            },
+            pins: {
+              shape: {
+                url: SHAPE_URL,
+                params: pinsSyncParams
+              },
+              table: 'pins',
+              primaryKey: ['id']
+            }
           },
-          table: 'maps',
-          primaryKey: ['id'],
-          shapeKey: 'maps',
-          initialInsertMethod: 'json'
-        });
-        console.log('✅ Maps sync configured');
-
-        // Sync pins table
-        await pdb.electric.syncShapeToTable({
-          shape: {
-            url: SHAPE_URL,
-            params: pinsSyncParams
+          key: 'showme-sync-v2',
+          onInitialSync: () => {
+            console.log('✅ Initial sync complete - all existing data loaded');
           },
-          table: 'pins',
-          primaryKey: ['id'],
-          shapeKey: 'pins',
-          initialInsertMethod: 'json'
+          onError: (error: any) => {
+            console.error('❌ Sync error:', error);
+            // Don't fail - app can continue in offline mode
+          }
         });
-        console.log('✅ Pins sync configured - real-time updates enabled!');
+        
+        console.log('✅ Electric v2 sync configured - real-time updates enabled!');
+        console.log('   Multi-table transactional consistency active');
+        
+        // Store sync handle for potential cleanup
+        (window as any).__electricSync = sync;
       } catch (error: any) {
         const errorMsg = error?.message || String(error);
         const statusCode = error?.status || error?.response?.status;
