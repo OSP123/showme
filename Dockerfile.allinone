@@ -1,0 +1,64 @@
+FROM postgres:17 AS postgres-base
+
+# Install ElectricSQL dependencies and Node.js
+RUN apt-get update && apt-get install -y \
+    curl \
+    supervisor \
+    nginx \
+    postgis \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g pnpm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Build frontend
+WORKDIR /build
+COPY client/package*.json client/pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
+COPY client/ ./
+RUN pnpm run build
+
+# Install ElectricSQL
+WORKDIR /electric
+# We'll use the official Electric image's binary - copy from their image
+FROM electricsql/electric:latest AS electric-binary
+
+# Final image
+FROM postgres:17
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    supervisor \
+    nginx \
+    postgis \
+    postgresql-contrib \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy frontend build
+COPY --from=postgres-base /build/dist /var/www/html
+
+# Copy Electric binary
+COPY --from=electric-binary /app /app
+
+# Copy migrations
+COPY migrations/*.sql /docker-entrypoint-initdb.d/
+
+# Copy configurations
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY nginx.conf /etc/nginx/sites-available/default
+
+# Environment variables
+ENV POSTGRES_USER=postgres \
+    POSTGRES_PASSWORD=showme_password \
+    POSTGRES_DB=showme \
+    DATABASE_URL=postgresql://postgres:showme_password@localhost:5432/showme \
+    ELECTRIC_WRITE_TO_PG_MODE=logical_replication \
+    ELECTRIC_USE_IPV6=false \
+    AUTH_MODE=insecure \
+    ELECTRIC_INSECURE=true \
+    PORT=8080
+
+EXPOSE 8080
+
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

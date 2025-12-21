@@ -1,7 +1,8 @@
 app = "showme"
-primary_region = "sea"
+primary_region = "sjc"
 
 [build]
+  dockerfile = "Dockerfile.allinone"
 
 [http_service]
   internal_port = 8080
@@ -12,6 +13,6 @@ primary_region = "sea"
   processes = ["app"]
 
 [[vm]]
-  memory = "1gb"
+  memory = "2gb"
   cpu_kind = "shared"
   cpus = 1
