@@ -27,7 +27,7 @@ RUN npm install -g sirv-cli
 COPY --from=build /app/dist ./dist
 
 # Railway provides $PORT, default to 3000 for local
-ENV PORT=3000
+ENV PORT=8080
 
 # Serve static files with sirv (SPA mode with --single flag)
 CMD sirv-cli dist --host 0.0.0.0 --port $PORT --single
