@@ -23,6 +23,12 @@ ENV VITE_ELECTRIC_SHAPE_URL=https://showme.fly.dev/v1/shape \
 
 RUN pnpm run build
 
+# Build API
+WORKDIR /api
+COPY api/package*.json ./
+RUN npm install --production
+COPY api/ ./
+
 # Install ElectricSQL
 WORKDIR /electric
 # We'll use the official Electric image's binary - copy from their image
@@ -45,6 +51,9 @@ COPY --from=postgres-base /build/dist /var/www/html
 
 # Copy Electric binary
 COPY --from=electric-binary /app /app
+
+# Copy API
+COPY --from=postgres-base /api /app/api
 
 # Copy migrations
 COPY migrations/*.sql /docker-entrypoint-initdb.d/
