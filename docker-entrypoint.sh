@@ -14,14 +14,16 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
     # Start PostgreSQL temporarily to run init scripts
     su postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA -o '-c listen_addresses=localhost' -w start"
     
-    # Create database and user
-    su postgres -c "psql --command \"CREATE USER $POSTGRES_USER WITH SUPERUSER PASSWORD '$POSTGRES_PASSWORD';\""  
-    su postgres -c "createdb -O $POSTGRES_USER $POSTGRES_DB"
+    # Create database and user (ignore if exists)
+    su postgres -c "psql --command \"CREATE USER $POSTGRES_USER WITH SUPERUSER PASSWORD '$POSTGRES_PASSWORD';\"" || true
+    su postgres -c "createdb -O $POSTGRES_USER $POSTGRES_DB" || true
     
     # Run migration scripts
     for f in /docker-entrypoint-initdb.d/*.sql; do
-        echo "Running $f..."
-        su postgres -c "psql -d $POSTGRES_DB -f $f"
+        if [ -f "$f" ]; then
+            echo "Running $f..."
+            su postgres -c "psql -d $POSTGRES_DB -f $f"
+        fi
     done
     
     # Stop PostgreSQL
