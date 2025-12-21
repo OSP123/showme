@@ -26,8 +26,8 @@ RUN npm install -g sirv-cli
 # Copy built files from build stage
 COPY --from=build /app/dist ./dist
 
-# Railway provides $PORT, default to 3000 for local
+# Fly.io provides $PORT, default to 8080
 ENV PORT=8080
 
 # Serve static files with sirv (SPA mode with --single flag)
-CMD sirv-cli dist --host 0.0.0.0 --port $PORT --single
+CMD npx sirv-cli dist --host 0.0.0.0 --port $PORT --single
