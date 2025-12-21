@@ -121,6 +121,7 @@
     top: calc(100% + 8px);
     right: 0;
     width: 400px;
+    max-width: calc(100vw - 16px);
     max-height: 500px;
     background: white;
     border-radius: 8px;
