@@ -17,6 +17,6 @@ primary_region = "sjc"
   cpu_kind = "shared"
   cpus = 1
 
-[mounts]
+[[mounts]]
   source = "showme_db_data"
   destination = "/var/lib/postgresql/data"
