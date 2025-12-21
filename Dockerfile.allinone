@@ -16,7 +16,11 @@ WORKDIR /build
 COPY client/package*.json client/pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile
 COPY client/ ./
-COPY .env.production .env.production
+
+# Set production environment variables for Vite build
+ENV VITE_ELECTRIC_SHAPE_URL=https://showme.fly.dev/v1/shape \
+    VITE_ELECTRIC_SOURCE_ID=prod-source-001
+
 RUN pnpm run build
 
 # Install ElectricSQL
