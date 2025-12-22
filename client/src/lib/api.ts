@@ -8,6 +8,9 @@ import { fuzzCoordinates } from './fuzzing';
 import { getEncryptionKey } from './db/keyManager';
 import { encryptPinRow, decryptPinRow, encryptMapRow, decryptMapRow, decryptPinRows, decryptMapRows } from './db/fieldEncryption';
 
+// API base URL - use nginx proxy in Docker, relative path in production
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 // Check if a map exists in PostgreSQL
 async function ensureMapExistsInPostgres(db: PGliteWithSync, mapId: string): Promise<boolean> {
   try {
@@ -110,7 +113,7 @@ export async function createMap(
   // NEW: Save to PostgreSQL via backend API for ElectricSQL sync
   try {
     console.log('🔄 Saving map to PostgreSQL via API for real-time sync...');
-    const response = await fetch('/api/maps', {
+    const response = await fetch(`${API_URL}/api/maps`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -326,7 +329,7 @@ export async function addPin(
 
   //Write to PostgreSQL via new API
   try {
-    const response = await fetch('/api/pins', {
+    const response = await fetch(`${API_URL}/api/pins`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

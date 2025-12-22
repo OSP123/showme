@@ -60,6 +60,23 @@ services:
     networks:
       - net
     restart: "unless-stopped"
+  # Backend API: Express.js API for client writes
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    environment:
+      DATABASE_URL: postgresql://showme:showme@db:5432/showme
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - net
+    restart: "unless-stopped"
   # Required by electric to expose necessary headers
   nginx:
     image: nginx:1.29-alpine
@@ -78,6 +95,8 @@ services:
     depends_on:
       - nginx
     volumes:
+      - ./client/package.json:/app/package.json
+      - ./client/pnpm-lock.yaml:/app/pnpm-lock.yaml
       - ./client/public:/app/public
       - ./client/src:/app/src
       - ./client/index.html:/app/index.html
@@ -87,6 +106,7 @@ services:
     environment:
       VITE_ELECTRIC_SHAPE_URL: http://localhost:3013/v1/shape
       VITE_ELECTRIC_SOURCE_ID: dev-source-001
+      VITE_API_URL: http://localhost:3013
       VITE_CLOUDINARY_CLOUD_NAME: dmwttd5c7
       VITE_CLOUDINARY_UPLOAD_PRESET: showme-photos
     ports:

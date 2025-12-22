@@ -1,0 +1,23 @@
+app = "showme-electric"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile.electric"
+
+[env]
+  ELECTRIC_WRITE_TO_PG_MODE = "logical_replication"
+  AUTH_MODE = "insecure"
+  ELECTRIC_USE_IPV6 = "false"
+  ELECTRIC_INSECURE = "true"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -20,6 +20,9 @@ FROM docker.io/node:22-slim AS production
 
 WORKDIR /app
 
+# Install pnpm globally (needed for dev server in docker-compose)
+RUN npm install -g pnpm
+
 # Install sirv-cli for serving static files
 RUN npm install -g sirv-cli
 

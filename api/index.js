@@ -23,20 +23,21 @@ app.get('/health', (req, res) => {
 // Create map
 app.post('/api/maps', async (req, res) => {
   try {
-    const { name, is_private = false, access_token = null, fuzzing_enabled = false, fuzzing_radius = 100 } = req.body;
-    
+    const { id, name, is_private = false, access_token = null, fuzzing_enabled = false, fuzzing_radius = 100, created_at } = req.body;
+
     if (!name) {
       return res.status(400).json({ error: 'Map name is required' });
     }
 
-    const id = uuidv4();
-    const created_at = new Date().toISOString();
+    // Use client-provided ID or generate new one
+    const mapId = id || uuidv4();
+    const timestamp = created_at || new Date().toISOString();
 
     const result = await pool.query(
       `INSERT INTO maps (id, name, is_private, access_token, fuzzing_enabled, fuzzing_radius, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [id, name, is_private, access_token, fuzzing_enabled, fuzzing_radius, created_at]
+      [mapId, name, is_private, access_token, fuzzing_enabled, fuzzing_radius, timestamp]
     );
 
     console.log('Created map:', result.rows[0].id);
@@ -50,21 +51,22 @@ app.post('/api/maps', async (req, res) => {
 // Create pin
 app.post('/api/pins', async (req, res) => {
   try {
-    const { map_id, lat, lng, type = null, tags = [], description = null, photo_urls = [], expires_at = null } = req.body;
+    const { id, map_id, lat, lng, type = null, tags = [], description = null, photo_urls = [], expires_at = null, created_at, updated_at } = req.body;
 
     if (!map_id || lat === undefined || lng === undefined) {
       return res.status(400).json({ error: 'map_id, lat, and lng are required' });
     }
 
-    const id = uuidv4();
-    const created_at = new Date().toISOString();
-    const updated_at = created_at;
+    // Use client-provided ID or generate new one
+    const pinId = id || uuidv4();
+    const timestamp = created_at || new Date().toISOString();
+    const updateTimestamp = updated_at || timestamp;
 
     const result = await pool.query(
       `INSERT INTO pins (id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
-      [id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at]
+      [pinId, map_id, lat, lng, type, tags, description, photo_urls, expires_at, timestamp, updateTimestamp]
     );
 
     console.log('Created pin:', result.rows[0].id, 'for map:', map_id);
@@ -105,3 +107,6 @@ process.on('SIGTERM', async () => {
   await pool.end();
   process.exit(0);
 });
+
+// Export for testing
+module.exports = app;

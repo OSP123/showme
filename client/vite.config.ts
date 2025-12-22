@@ -21,13 +21,14 @@ export default defineConfig({
       '$styles': path.resolve(__dirname, './src/styles')
     }
   },
-  define: { 
+  define: {
     'process.env': JSON.stringify(process.env),
     global: 'globalThis'
   },
   server: {
     host: '0.0.0.0',
     port: 5173,
+    cors: false, // Disable Vite CORS - Electric provides CORS headers
     fs: {
       allow: ['..'] // Allow access to parent directory
     }
