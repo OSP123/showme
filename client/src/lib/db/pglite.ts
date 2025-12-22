@@ -119,7 +119,8 @@ export function initLocalDb(): Promise<PGlite> {
                 params: mapsSyncParams
               },
               table: 'maps',
-              primaryKey: ['id']
+              primaryKey: ['id'],
+              insertMode: 'replace' // Use UPSERT to avoid duplicate key errors
             },
             pins: {
               shape: {
@@ -127,7 +128,8 @@ export function initLocalDb(): Promise<PGlite> {
                 params: pinsSyncParams
               },
               table: 'pins',
-              primaryKey: ['id']
+              primaryKey: ['id'],
+              insertMode: 'replace' // Use UPSERT to avoid duplicate key errors
             }
           },
           key: 'showme-sync-v2',
@@ -139,10 +141,10 @@ export function initLocalDb(): Promise<PGlite> {
             // Don't fail - app can continue in offline mode
           }
         });
-        
+
         console.log('✅ Electric v2 sync configured - real-time updates enabled!');
         console.log('   Multi-table transactional consistency active');
-        
+
         // Store sync handle for potential cleanup
         (window as any).__electricSync = sync;
       } catch (error: any) {
