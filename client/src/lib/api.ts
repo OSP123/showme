@@ -29,14 +29,15 @@ async function ensureMapExistsInPostgres(db: PGliteWithSync, mapId: string): Pro
     const map = localResult.rows[0];
 
     // Check if map exists in PostgreSQL
-    const response = await fetch(`http://localhost:3015/maps?id=eq.${mapId}&select=id`, {
+    // Use GET /api/maps/:id (returns array [map] or [])
+    const response = await fetch(`${API_URL}/api/maps/${mapId}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
 
     if (response.ok) {
       const maps = await response.json();
-      if (maps.length > 0) {
+      if (Array.isArray(maps) && maps.length > 0) {
         return true; // Map exists in PostgreSQL
       }
     }
@@ -58,10 +59,10 @@ async function ensureMapExistsInPostgres(db: PGliteWithSync, mapId: string): Pro
   }
 }
 
-// Simple PostgreSQL HTTP client using PostgREST
+// Simple PostgreSQL HTTP client using Backend API
 async function saveToPostgres(table: string, data: any) {
   try {
-    const response = await fetch(`http://localhost:3015/${table}`, {
+    const response = await fetch(`${API_URL}/api/${table}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
