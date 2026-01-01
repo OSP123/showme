@@ -41,7 +41,8 @@
     const statusInterval = setInterval(() => {
       if (isOnline) {
         // Try to ping the server to check connectivity
-        fetch('http://localhost:3015/', { method: 'HEAD', mode: 'no-cors' })
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        fetch(`${apiUrl}/health`, { method: 'GET', mode: 'cors' })
           .then(() => {
             if (queuedOperations === 0) {
               syncStatus = 'synced';
