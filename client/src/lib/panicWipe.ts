@@ -10,15 +10,15 @@ import type { PGlite } from '@electric-sql/pglite';
 export async function panicWipe(db: PGlite | any): Promise<void> {
   try {
     console.warn('🚨 PANIC WIPE INITIATED - Deleting all local data...');
-    
+
     // Set flag on window for immediate use (before deletion)
     (window as any).__panicWipeActive = true;
-    
+
     // Dispatch event IMMEDIATELY to stop polling before deletion
     // This prevents polling from re-adding pins during/after deletion
     window.dispatchEvent(new CustomEvent('panic-wipe-complete'));
     console.log('✅ Panic wipe event dispatched - polling should stop now');
-    
+
     // Stop ElectricSQL sync before deletion to prevent re-sync
     try {
       if (db.electric && db.electric.stop) {
@@ -28,52 +28,52 @@ export async function panicWipe(db: PGlite | any): Promise<void> {
     } catch (error) {
       console.warn('⚠️ Could not stop ElectricSQL sync:', error);
     }
-    
+
     // Delete all pins from local database
     const pinsResult = await db.query('DELETE FROM pins');
     console.log('✅ All pins deleted from local DB', pinsResult);
-    
+
     // Also try to delete all pins from PostgREST (remote server)
     // PostgREST requires a filter - use a filter that matches all records
     try {
       // First, try to get all pin IDs to delete them
-      const pinsResponse = await fetch('http://localhost:3015/pins?select=id', {
+      const pinsResponse = await fetch(`${API_URL}/api/pins?select=id`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       if (pinsResponse.ok) {
         const allPins = await pinsResponse.json();
         console.log(`🔄 Found ${allPins.length} pins in PostgREST, deleting...`);
-        
+
         // Delete pins in batches (PostgREST might have limits)
         // PostgREST requires UUIDs to be properly formatted in the filter
         for (let i = 0; i < allPins.length; i += 100) {
           const batch = allPins.slice(i, i + 100);
           // PostgREST 'in' operator requires parentheses and comma-separated values
           const ids = batch.map((p: any) => p.id).join(',');
-          
+
           // Delete this batch using PostgREST filter syntax: id=in.(uuid1,uuid2,...)
-          const deleteUrl = `http://localhost:3015/pins?id=in.(${ids})`;
-          console.log(`🔄 Deleting batch ${Math.floor(i/100) + 1}: ${batch.length} pins from PostgREST`);
+          const deleteUrl = `${API_URL}/api/pins?id=in.(${ids})`;
+          console.log(`🔄 Deleting batch ${Math.floor(i / 100) + 1}: ${batch.length} pins from PostgREST`);
           const deleteResponse = await fetch(deleteUrl, {
             method: 'DELETE',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal'
             },
           });
-          
+
           if (deleteResponse.ok || deleteResponse.status === 204) {
             const deletedCount = deleteResponse.headers.get('Content-Range') || batch.length;
-            console.log(`✅ Deleted batch ${Math.floor(i/100) + 1} (${batch.length} pins) from PostgREST`);
+            console.log(`✅ Deleted batch ${Math.floor(i / 100) + 1} (${batch.length} pins) from PostgREST`);
           } else {
             const errorText = await deleteResponse.text();
-            console.error(`❌ Failed to delete pin batch ${Math.floor(i/100) + 1} (${deleteResponse.status}):`, errorText);
+            console.error(`❌ Failed to delete pin batch ${Math.floor(i / 100) + 1} (${deleteResponse.status}):`, errorText);
             // Continue with next batch even if this one fails
           }
         }
-        
+
         console.log('✅ All pins deleted from PostgREST');
       } else {
         const errorText = await pinsResponse.text();
@@ -82,7 +82,7 @@ export async function panicWipe(db: PGlite | any): Promise<void> {
     } catch (error) {
       console.warn('⚠️ Could not delete pins from PostgREST (server may be offline):', error);
     }
-    
+
     // Verify local deletion
     const pinsCheck = await db.query('SELECT COUNT(*) as count FROM pins');
     const pinsRemaining = pinsCheck.rows[0]?.count || 0;
@@ -91,49 +91,50 @@ export async function panicWipe(db: PGlite | any): Promise<void> {
     } else {
       console.log('✅ Verified: All pins deleted from local DB successfully');
     }
-    
+
     // Delete all maps from local database
     const mapsResult = await db.query('DELETE FROM maps');
     console.log('✅ All maps deleted from local DB', mapsResult);
-    
+
     // Also try to delete all maps from PostgREST (remote server)
     // PostgREST requires a filter - use a filter that matches all records
     try {
       // First, try to get all map IDs to delete them
-      const mapsResponse = await fetch('http://localhost:3015/maps?select=id', {
+      const mapsResponse = await fetch(`${API_URL}/api/maps?select=id`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       if (mapsResponse.ok) {
         const allMaps = await mapsResponse.json();
         console.log(`🔄 Found ${allMaps.length} maps in PostgREST, deleting...`);
-        
+
         // Delete maps in batches (PostgREST might have limits)
+        // PostgREST requires UUIDs to be properly formatted in the filter
         for (let i = 0; i < allMaps.length; i += 100) {
           const batch = allMaps.slice(i, i + 100);
           const ids = batch.map((m: any) => m.id).join(',');
-          
+
           // Delete this batch using PostgREST filter syntax: id=in.(uuid1,uuid2,...)
-          const deleteUrl = `http://localhost:3015/maps?id=in.(${ids})`;
-          console.log(`🔄 Deleting batch ${Math.floor(i/100) + 1}: ${batch.length} maps from PostgREST`);
+          const deleteUrl = `${API_URL}/api/maps?id=in.(${ids})`;
+          console.log(`🔄 Deleting batch ${Math.floor(i / 100) + 1}: ${batch.length} maps from PostgREST`);
           const deleteResponse = await fetch(deleteUrl, {
             method: 'DELETE',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'Prefer': 'return=minimal'
             },
           });
-          
+
           if (deleteResponse.ok || deleteResponse.status === 204) {
-            console.log(`✅ Deleted batch ${Math.floor(i/100) + 1} (${batch.length} maps) from PostgREST`);
+            console.log(`✅ Deleted batch ${Math.floor(i / 100) + 1} (${batch.length} maps) from PostgREST`);
           } else {
             const errorText = await deleteResponse.text();
-            console.error(`❌ Failed to delete map batch ${Math.floor(i/100) + 1} (${deleteResponse.status}):`, errorText);
+            console.error(`❌ Failed to delete map batch ${Math.floor(i / 100) + 1} (${deleteResponse.status}):`, errorText);
             // Continue with next batch even if this one fails
           }
         }
-        
+
         console.log('✅ All maps deleted from PostgREST');
       } else {
         const errorText = await mapsResponse.text();
@@ -142,7 +143,7 @@ export async function panicWipe(db: PGlite | any): Promise<void> {
     } catch (error) {
       console.warn('⚠️ Could not delete maps from PostgREST (server may be offline):', error);
     }
-    
+
     // Verify local deletion
     const mapsCheck = await db.query('SELECT COUNT(*) as count FROM maps');
     const mapsRemaining = mapsCheck.rows[0]?.count || 0;
@@ -151,7 +152,7 @@ export async function panicWipe(db: PGlite | any): Promise<void> {
     } else {
       console.log('✅ Verified: All maps deleted from local DB successfully');
     }
-    
+
     // Clear operation queue FIRST (before localStorage.clear which also clears it)
     // This prevents queued operations from being processed after deletion
     if (typeof window !== 'undefined' && (window as any).operationQueue) {
@@ -162,23 +163,23 @@ export async function panicWipe(db: PGlite | any): Promise<void> {
         console.warn('⚠️ Could not clear operation queue:', e);
       }
     }
-    
+
     // Clear localStorage (operation queue, etc.)
     localStorage.clear();
     console.log('✅ LocalStorage cleared');
-    
+
     // Set panic wipe flag AFTER clearing localStorage so it persists across reloads
     // This prevents polling from re-fetching pins from PostgREST after page reload
     localStorage.setItem('__panicWipeActive', 'true');
     (window as any).__panicWipeActive = true;
     console.log('✅ Panic wipe flag set - polling will remain disabled after reload');
-    
+
     // Clear IndexedDB (PGLite storage)
     // Note: PGLite uses IndexedDB, but we can't directly clear it
     // The database will be empty after deleting all tables
-    
+
     console.warn('🚨 PANIC WIPE COMPLETE - All local data has been deleted');
-    
+
     // Clear mapId from URL to force user to create a new map
     if (typeof window !== 'undefined') {
       const url = new URL(window.location.href);
@@ -186,7 +187,7 @@ export async function panicWipe(db: PGlite | any): Promise<void> {
       window.history.replaceState({}, '', url);
       console.log('✅ Cleared mapId from URL - user will need to create a new map');
     }
-    
+
     // Event was already dispatched at the start to stop polling immediately
   } catch (error) {
     console.error('❌ Error during panic wipe:', error);
