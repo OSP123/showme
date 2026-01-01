@@ -28,10 +28,10 @@ describe('panicWipe', () => {
     vi.clearAllMocks();
     resetPanicWipeCooldown();
     mockWindow.__panicWipeActive = false;
-    
+
     // Reset fetch mock
     (global.fetch as any).mockReset();
-    
+
     // Setup mock database
     mockDb = {
       query: vi.fn(),
@@ -39,7 +39,7 @@ describe('panicWipe', () => {
         stop: vi.fn().mockResolvedValue(undefined),
       },
     };
-    
+
     // Mock successful deletions
     mockDb.query.mockImplementation(async (sql: string) => {
       if (sql.includes('DELETE FROM pins')) {
@@ -53,29 +53,29 @@ describe('panicWipe', () => {
       }
       return { rows: [], rowCount: 0 };
     });
-    
+
     // Mock operation queue
     (global.window as any).operationQueue = {
       clearQueue: vi.fn(),
     };
-    
+
     // Mock window.location
     delete (global.window as any).location;
     (global.window as any).location = {
       href: 'http://localhost:5173/?map=test-map-id',
       reload: vi.fn(),
     };
-    
+
     // Mock URL and history
     global.URL = class {
-      constructor(public href: string) {}
+      constructor(public href: string) { }
       searchParams = {
         delete: vi.fn(),
         set: vi.fn(),
         get: vi.fn(),
       };
     } as any;
-    
+
     global.window.history = {
       replaceState: vi.fn(),
       pushState: vi.fn(),
@@ -96,7 +96,7 @@ describe('panicWipe', () => {
       { id: 'pin2' },
       { id: 'pin3' },
     ];
-    
+
     (global.fetch as any)
       .mockResolvedValueOnce({
         ok: true,
@@ -111,13 +111,13 @@ describe('panicWipe', () => {
 
     // Should fetch pins from PostgREST
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:3015/pins?select=id',
+      expect.stringContaining('/pins?select=id'),
       expect.objectContaining({ method: 'GET' })
     );
 
     // Should delete pins from PostgREST
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:3015/pins?id=in.(pin1,pin2,pin3)',
+      expect.stringContaining('/pins?id=in.(pin1,pin2,pin3)'),
       expect.objectContaining({ method: 'DELETE' })
     );
   });
@@ -156,7 +156,7 @@ describe('panicWipe', () => {
     (global.fetch as any).mockRejectedValueOnce(new Error('Network error'));
 
     await expect(panicWipe(mockDb)).resolves.not.toThrow();
-    
+
     // Should still delete from local DB
     expect(mockDb.query).toHaveBeenCalledWith('DELETE FROM pins');
   });
@@ -193,7 +193,7 @@ describe('panicWipe', () => {
     mockDb.electric.stop.mockRejectedValueOnce(new Error('Stop failed'));
 
     await expect(panicWipe(mockDb)).resolves.not.toThrow();
-    
+
     // Should still delete from local DB
     expect(mockDb.query).toHaveBeenCalledWith('DELETE FROM pins');
   });

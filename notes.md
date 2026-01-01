@@ -197,3 +197,14 @@ Follow-ups:
 - User should retry Render Blueprint deployment
 - Use latest commit with all Dockerfiles
 
+
+## Date: 2025-12-22
+
+### Tasks:
+- Fixed local Docker ElectricSQL v2 sync (API ID handling, nginx config, tests)
+- Deployed to production (nginx port 8080, API ID fix)
+- Debugged production sync: Electric replication slot created before data insertion
+
+### Follow-ups:
+- Need to reset Electric replication slot to pick up existing data
+- Electric snapshots at startup - data added after = not synced

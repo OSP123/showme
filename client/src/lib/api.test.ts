@@ -55,7 +55,7 @@ describe('API Functions', () => {
 
       // Verify PostgREST call
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:3015/maps',
+        'http://example.com/maps',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({

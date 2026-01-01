@@ -3,6 +3,8 @@
 
 import type { PGlite } from '@electric-sql/pglite';
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 /**
  * Panic wipe: Deletes all local data immediately
  * This is a safety feature for emergency situations

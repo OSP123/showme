@@ -83,15 +83,17 @@ describe('OperationQueue', () => {
         status: 200,
       });
 
-      await queue.enqueue('createMap', { id: 'map-1', name: 'Test Map' });
+      const opData = { id: 'map-1', name: 'Test Map' };
+      await queue.enqueue('createMap', opData);
 
       await queue.processQueue();
 
       expect(queue.getQueueLength()).toBe(0);
       expect(global.fetch).toHaveBeenCalledWith(
-        'http://localhost:3015/maps',
+        expect.stringContaining('/api/maps'),
         expect.objectContaining({
           method: 'POST',
+          body: JSON.stringify(opData)
         })
       );
     });
@@ -102,7 +104,7 @@ describe('OperationQueue', () => {
         .mockResolvedValueOnce({ ok: true, status: 200 });
 
       const operationId = await queue.enqueue('addPin', { id: 'pin-1' });
-      
+
       // Wait for initial processing attempt (from enqueue)
       await vi.runAllTimersAsync();
 
@@ -113,7 +115,7 @@ describe('OperationQueue', () => {
       // Should still be in queue after first failure (retry count = 1, not max yet)
       // But processQueue might have already retried, so check if it's still there or was removed
       const lengthAfterFirst = queue.getQueueLength();
-      
+
       // If still in queue, process again. If removed, that's also valid (means it succeeded on retry)
       if (lengthAfterFirst > 0) {
         // Second attempt - should succeed
@@ -129,7 +131,7 @@ describe('OperationQueue', () => {
       (global.fetch as any).mockResolvedValue({ ok: false, status: 500 });
 
       await queue.enqueue('createMap', { id: 'map-1' });
-      
+
       // Wait for initial processing attempt
       await vi.runAllTimersAsync();
 
@@ -139,10 +141,10 @@ describe('OperationQueue', () => {
         const lengthBefore = queue.getQueueLength();
         await queue.processQueue();
         await vi.runAllTimersAsync(); // Wait for delay between operations
-        
+
         // After processing, check if still in queue
         const lengthAfter = queue.getQueueLength();
-        
+
         // If this is the last attempt (i === 2), it should be removed
         // Otherwise, it might still be there (if retries < MAX_RETRIES)
         if (i === 2) {
@@ -253,7 +255,7 @@ describe('OperationQueue', () => {
       let pinCallCount = 0;
       (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
         const urlStr = typeof url === 'string' ? url : '';
-        
+
         // Map check call
         if (urlStr.includes('/maps?id=eq.')) {
           return {
@@ -261,11 +263,11 @@ describe('OperationQueue', () => {
             json: async () => [{ id: 'map-1' }],
           };
         }
-        
+
         // Pin POST calls
         if (urlStr.includes('/pins') && options?.method === 'POST') {
           pinCallCount++;
-          
+
           // First pin call (with Phase 3 fields) - fails with column error
           if (pinCallCount === 1) {
             return {
@@ -277,7 +279,7 @@ describe('OperationQueue', () => {
               }),
             };
           }
-          
+
           // Second pin call (without Phase 3 fields) - succeeds
           if (pinCallCount === 2) {
             return {
@@ -287,7 +289,7 @@ describe('OperationQueue', () => {
             };
           }
         }
-        
+
         // Default fallback
         return {
           ok: true,
@@ -297,7 +299,7 @@ describe('OperationQueue', () => {
       });
 
       await queue.enqueue('addPin', pinData);
-      
+
       // Process queue - wait for all async operations
       await queue.processQueue();
       await vi.runAllTimersAsync();
@@ -305,7 +307,7 @@ describe('OperationQueue', () => {
 
       // Get all fetch calls
       const allFetchCalls = (global.fetch as any).mock.calls || [];
-      
+
       // Filter for pin POST calls (exclude map check GET calls)
       const pinCalls = allFetchCalls.filter((call: any[]) => {
         if (!call || !call[0]) return false;
@@ -313,7 +315,7 @@ describe('OperationQueue', () => {
         const method = call[1]?.method || 'GET';
         return url.includes('/pins') && method === 'POST';
       });
-      
+
       // Should have at least 2 calls (first attempt + fallback)
       expect(pinCalls.length).toBeGreaterThanOrEqual(2);
 
@@ -350,7 +352,7 @@ describe('OperationQueue', () => {
       let pinCallCount = 0;
       (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
         const urlStr = typeof url === 'string' ? url : '';
-        
+
         // Map check call
         if (urlStr.includes('/maps?id=eq.')) {
           mapCheckDone = true;
@@ -359,11 +361,11 @@ describe('OperationQueue', () => {
             json: async () => [{ id: 'map-1' }],
           };
         }
-        
+
         // Pin calls
         if (urlStr.includes('/pins') && options?.method === 'POST') {
           pinCallCount++;
-          
+
           // First pin call - fails with column error
           if (pinCallCount === 1) {
             return {
@@ -375,7 +377,7 @@ describe('OperationQueue', () => {
               }),
             };
           }
-          
+
           // Second pin call (fallback) - succeeds
           if (pinCallCount === 2) {
             return {
@@ -385,7 +387,7 @@ describe('OperationQueue', () => {
             };
           }
         }
-        
+
         // Default fallback
         return {
           ok: true,
@@ -395,7 +397,7 @@ describe('OperationQueue', () => {
       });
 
       await queue.enqueue('addPin', pinData);
-      
+
       // Process queue - wait for all async operations
       await queue.processQueue();
       await vi.runAllTimersAsync();
@@ -403,7 +405,7 @@ describe('OperationQueue', () => {
 
       // Get all fetch calls to debug
       const allFetchCalls = (global.fetch as any).mock.calls || [];
-      
+
       // Filter for pin POST calls (exclude map check GET calls)
       const pinCalls = allFetchCalls.filter((call: any[]) => {
         if (!call || !call[0]) return false;
@@ -411,7 +413,7 @@ describe('OperationQueue', () => {
         const method = call[1]?.method || 'GET';
         return url.includes('/pins') && method === 'POST';
       });
-      
+
       // Debug: log all fetch calls
       if (pinCalls.length < 2) {
         console.log('All fetch calls:', allFetchCalls.map((call: any[]) => ({
@@ -419,10 +421,10 @@ describe('OperationQueue', () => {
           method: call[1]?.method || 'GET',
         })));
       }
-      
+
       // Should have made 2 pin calls (first attempt + fallback)
       expect(pinCalls.length).toBeGreaterThanOrEqual(2);
-      
+
       // Queue should be empty after successful fallback
       expect(queue.getQueueLength()).toBe(0);
     });
@@ -451,7 +453,7 @@ describe('OperationQueue', () => {
       // Mock map check + pin calls
       (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
         const urlStr = typeof url === 'string' ? url : '';
-        
+
         // Map check call
         if (urlStr.includes('/maps?id=eq.')) {
           return {
@@ -459,11 +461,11 @@ describe('OperationQueue', () => {
             json: async () => [{ id: 'map-1' }],
           };
         }
-        
+
         // Pin POST calls
         if (urlStr.includes('/pins') && options?.method === 'POST') {
           pinCallCount++;
-          
+
           // First call fails with column error
           if (pinCallCount === 1) {
             return {
@@ -475,7 +477,7 @@ describe('OperationQueue', () => {
               }),
             };
           }
-          
+
           // Fallback call also fails
           if (pinCallCount === 2) {
             return {
@@ -485,7 +487,7 @@ describe('OperationQueue', () => {
             };
           }
         }
-        
+
         return {
           ok: true,
           status: 200,
@@ -495,7 +497,7 @@ describe('OperationQueue', () => {
 
       await queue.enqueue('addPin', pinData);
       await queue.processQueue();
-      
+
       // Don't run all timers - that might trigger retry delays and process the queue again
       // Just wait a bit for the current operation to complete
       await vi.advanceTimersByTimeAsync(10);
@@ -520,7 +522,7 @@ describe('OperationQueue', () => {
       // Map doesn't exist (empty array means map not found)
       (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
         const urlStr = typeof url === 'string' ? url : '';
-        
+
         // Map check call - returns empty array (map doesn't exist)
         if (urlStr.includes('/maps?id=eq.')) {
           return {
@@ -528,7 +530,7 @@ describe('OperationQueue', () => {
             json: async () => [], // Map not found
           };
         }
-        
+
         // Should not reach here, but if it does, return success
         return {
           ok: true,
@@ -538,14 +540,14 @@ describe('OperationQueue', () => {
       });
 
       await queue.enqueue('addPin', pinData);
-      
+
       // Verify initial state
       expect(queue.getQueueLength()).toBe(1);
-      
+
       // Process queue once - operation should fail because map doesn't exist
       // executeOperation returns false when map doesn't exist, so operation stays in queue
       await queue.processQueue();
-      
+
       // Don't run all timers - that might trigger retry delays and process the queue again
       // Just wait a bit for the current operation to complete
       await vi.advanceTimersByTimeAsync(10);
@@ -554,7 +556,7 @@ describe('OperationQueue', () => {
       // executeOperation returns false, so retries++ but operation stays (MAX_RETRIES is 3)
       // After 1 retry, it should still be in queue
       expect(queue.getQueueLength()).toBe(1);
-      
+
       // Should not have called /pins endpoint (only map check should be called)
       const allCalls = (global.fetch as any).mock.calls || [];
       const pinCalls = allCalls.filter((call: any[]) => {
