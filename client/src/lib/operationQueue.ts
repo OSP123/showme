@@ -9,6 +9,7 @@ interface QueuedOperation {
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 5000; // 5 seconds
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export class OperationQueue {
   private queue: QueuedOperation[] = [];
@@ -247,7 +248,7 @@ export class OperationQueue {
               delete fallbackData.expires_at;
               console.log('🔄 Retrying pin operation without Phase 3 fields...');
 
-              response = await fetch('http://localhost:3015/pins', {
+              response = await fetch(`${API_URL}/api/pins`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
