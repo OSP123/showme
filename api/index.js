@@ -48,6 +48,20 @@ app.post('/api/maps', async (req, res) => {
   }
 });
 
+// Get map by ID (array format for backward compatibility)
+app.get('/api/maps/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT * FROM maps WHERE id = $1', [id]);
+
+    // Return array to match legacy PostgREST expectations
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting map:', error);
+    res.status(500).json({ error: 'Failed to get map' });
+  }
+});
+
 // Create pin
 app.post('/api/pins', async (req, res) => {
   try {
