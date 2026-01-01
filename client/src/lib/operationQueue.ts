@@ -18,7 +18,7 @@ export class OperationQueue {
   constructor() {
     // Load queue from localStorage on init
     this.loadFromStorage();
-    
+
     // Listen for online events to retry operations
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
@@ -85,7 +85,7 @@ export class OperationQueue {
       console.debug('⏸️ Operation queue processing disabled - panic wipe active');
       return;
     }
-    
+
     if (this.processing || this.queue.length === 0 || !navigator.onLine) {
       return;
     }
@@ -94,7 +94,7 @@ export class OperationQueue {
     console.log(`🔄 Processing ${this.queue.length} queued operations...`);
 
     const operationsToProcess = [...this.queue];
-    
+
     for (const operation of operationsToProcess) {
       // Check panic wipe flag before each operation (check both window flag and localStorage)
       const panicWipeActive = (window as any).__panicWipeActive || localStorage.getItem('__panicWipeActive') === 'true';
@@ -103,10 +103,10 @@ export class OperationQueue {
         this.processing = false;
         return;
       }
-      
+
       try {
         const success = await this.executeOperation(operation);
-        
+
         if (success) {
           // Remove from queue on success
           this.queue = this.queue.filter(op => op.id !== operation.id);
@@ -116,7 +116,7 @@ export class OperationQueue {
         } else {
           // Increment retries
           operation.retries++;
-          
+
           if (operation.retries >= MAX_RETRIES) {
             // Remove after max retries
             console.warn(`⚠️ Operation ${operation.id} exceeded max retries, removing from queue`);
@@ -135,20 +135,20 @@ export class OperationQueue {
       } catch (error) {
         console.error(`❌ Error processing operation ${operation.id}:`, error);
         operation.retries++;
-        
+
         if (operation.retries >= MAX_RETRIES) {
           this.queue = this.queue.filter(op => op.id !== operation.id);
           this.saveToStorage();
           this.notify();
         }
       }
-      
+
       // Small delay between operations
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     this.processing = false;
-    
+
     if (this.queue.length > 0) {
       // Retry remaining operations after delay
       setTimeout(() => this.processQueue(), RETRY_DELAY);
@@ -162,12 +162,12 @@ export class OperationQueue {
       console.debug('⏸️ Operation execution skipped - panic wipe active');
       return false;
     }
-    
+
     try {
       if (operation.type === 'createMap') {
-        const response = await fetch('http://localhost:3015/maps', {
+        const response = await fetch(`${API_URL}/api/maps`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'Prefer': 'return=minimal'
           },
@@ -179,14 +179,15 @@ export class OperationQueue {
         // This prevents foreign key constraint violations
         const mapId = operation.data.map_id;
         try {
-          const mapCheckResponse = await fetch(`http://localhost:3015/maps?id=eq.${mapId}&select=id`, {
+          // Use GET /api/maps/:id (returns array [map] or [])
+          const mapCheckResponse = await fetch(`${API_URL}/api/maps/${mapId}`, {
             method: 'GET',
             headers: { 'Content-Type': 'application/json' },
           });
-          
+
           if (mapCheckResponse.ok) {
             const maps = await mapCheckResponse.json();
-            if (maps.length === 0) {
+            if (Array.isArray(maps) && maps.length === 0) {
               // Map doesn't exist - this operation will fail, so return false
               // The map should be created/synced first
               console.warn(`⚠️ Map ${mapId} does not exist in PostgreSQL, pin operation will retry after map sync`);
@@ -197,27 +198,27 @@ export class OperationQueue {
           // If we can't check, continue anyway - the pin creation will fail if map doesn't exist
           console.warn('⚠️ Could not check if map exists, proceeding with pin creation:', mapCheckError);
         }
-        
+
         // Map exists (or we couldn't check), try to create the pin
         let response: Response;
         try {
-          response = await fetch('http://localhost:3015/pins', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Prefer': 'return=minimal'
-          },
-                body: JSON.stringify(operation.data)
+          response = await fetch(`${API_URL}/api/pins`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(operation.data)
           });
         } catch (fetchError) {
           console.error('❌ Network error during pin operation:', fetchError);
           return false;
         }
-        
+
         if (!response.ok) {
           let errorText = await response.text();
           let errorMessage = errorText;
-          
+
           // Try to parse as JSON (PostgREST returns JSON errors)
           try {
             const errorJson = JSON.parse(errorText);
@@ -225,18 +226,18 @@ export class OperationQueue {
           } catch {
             // Not JSON, use as-is
           }
-          
+
           console.error(`❌ Pin operation failed (${response.status}):`, errorMessage);
           console.error('📦 Data sent:', JSON.stringify(operation.data, null, 2));
-          
+
           // Check if it's a column doesn't exist error (for backward compatibility)
           // PostgREST error: "Could not find the 'expires_at' column of 'pins' in the schema cache"
           const isColumnError = errorMessage.includes('column') && (
-            errorMessage.includes('does not exist') || 
+            errorMessage.includes('does not exist') ||
             errorMessage.includes('Could not find') ||
             errorText.includes('PGRST204')
           );
-          
+
           if (isColumnError) {
             console.warn(`⚠️ Column doesn't exist in PostgreSQL yet, retrying without Phase 3 fields...`);
             // Try again without the new Phase 3 fields
@@ -245,16 +246,16 @@ export class OperationQueue {
               delete fallbackData.type;
               delete fallbackData.expires_at;
               console.log('🔄 Retrying pin operation without Phase 3 fields...');
-              
+
               response = await fetch('http://localhost:3015/pins', {
                 method: 'POST',
-                headers: { 
+                headers: {
                   'Content-Type': 'application/json',
                   'Prefer': 'return=minimal'
                 },
                 body: JSON.stringify(fallbackData)
               });
-              
+
               if (response.ok) {
                 console.log('✅ Pin saved successfully after fallback');
                 return true;
@@ -264,16 +265,16 @@ export class OperationQueue {
               console.error(`❌ Fallback also failed (${response.status}):`, fallbackErrorText);
             }
           }
-          
+
           // Check if it's a foreign key constraint error
           if (errorText.includes('foreign key constraint') || errorText.includes('23503')) {
             console.warn(`⚠️ Foreign key constraint error for pin - map ${mapId} may not exist yet`);
             return false; // Will retry later
           }
-          
+
           return false;
         }
-        
+
         return true;
       }
       return false;
