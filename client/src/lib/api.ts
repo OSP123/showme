@@ -163,9 +163,15 @@ export async function createMap(
     finalAccessToken = encrypted.access_token || access_token;
   }
 
+  // RESTORED: Save to local database for Optimistic UI
+  // We use ON CONFLICT to ensure that if sync arrives later, we don't error.
   await db.query(
     `INSERT INTO maps (id,name,is_private,access_token,created_at)
-     VALUES ($1,$2,$3,$4,$5)`,
+     VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (id) DO UPDATE SET
+       name = EXCLUDED.name,
+       is_private = EXCLUDED.is_private,
+       access_token = EXCLUDED.access_token`,
     [
       id,
       finalName,
@@ -230,7 +236,7 @@ export async function getPins(
   }
 }
 
-import type { PinData } from './models';
+// Duplicate import removed
 
 export async function addPin(
   db: PGliteWithSync,
@@ -304,31 +310,39 @@ export async function addPin(
     finalPhotoUrls = encrypted.photo_urls ? JSON.parse(encrypted.photo_urls) : photoUrlsArray;
   }
 
-  await db.query(
-    `INSERT INTO pins
-      (id,map_id,lat,lng,type,tags,description,photo_urls,expires_at,created_at,updated_at)
-     VALUES
-      ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-    [
+  // RESTORED: Save to local database first (Optimistic UI)
+  try {
+    const query = `
+      INSERT INTO pins (id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (id) DO UPDATE SET
+        lat = EXCLUDED.lat,
+        lng = EXCLUDED.lng,
+        type = EXCLUDED.type,
+        tags = EXCLUDED.tags,
+        description = EXCLUDED.description,
+        photo_urls = EXCLUDED.photo_urls,
+        updated_at = EXCLUDED.updated_at
+    `;
+
+    await db.query(query, [
       id,
       data.map_id,
       finalLat,
       finalLng,
       data.type || null,
-      finalTags, // Array for PGlite TEXT[]
+      finalTags,
       finalDescription,
-      finalPhotoUrls, // Array for PGlite TEXT[]
+      finalPhotoUrls,
       expiresAt,
       now,
       now
-    ]
-  );
-
-  // NOTE: We do NOT clear the panic wipe flag here
-  // The flag prevents fetching OLD pins from PostgREST, but allows NEW pins to be created locally
-  // This way, deleted pins stay deleted, but new pins work normally
-
-  //Write to PostgreSQL via new API
+    ]);
+    console.log('✅ Pin saved locally (optimistic)');
+  } catch (err) {
+    console.error('⚠️ Local pin save failed:', err);
+    // Proceed to API save anyway
+  }
   try {
     const response = await fetch(`${API_URL}/api/pins`, {
       method: 'POST',
@@ -484,6 +498,9 @@ export async function getMap(
 /**
  * Get all maps with decryption if enabled
  */
+/**
+ * Get all maps with decryption if enabled
+ */
 export async function getAllMaps(
   db: PGliteWithSync
 ): Promise<MapRow[]> {
@@ -498,5 +515,64 @@ export async function getAllMaps(
   } catch (error) {
     console.error('Failed to get maps:', error);
     return [];
+  }
+}
+
+
+/**
+ * Polling Sync Fallback: Fetch pins from API and merge into local DB.
+ * This ensures that even if ElectricSQL replication lags or fails, the client eventually gets the data.
+ */
+export async function syncPinsFromApi(db: PGliteWithSync, mapId: string): Promise<void> {
+  try {
+    const response = await fetch(`${API_URL}/api/pins?map_id=${mapId}`);
+    if (!response.ok) return;
+
+    const pins = await response.json();
+    if (!Array.isArray(pins) || pins.length === 0) return;
+
+    // Decrypt if necessary (though usually the API sends raw encrypted data, and we decrypt on read)
+    // Actually, PGlite stores encrypted data. The API returns what's in Postgres.
+    // If the data in Postgres is encrypted (it should be if encryption is on), we just store it as is.
+
+    // Batch upsert into local DB
+    // We transactionally insert/update all fetched pins
+    await db.transaction(async (tx) => {
+      for (const pin of pins) {
+        // Prepare tags and photo_urls as Postgres array literals or JSON strings depending on PGlite expectation
+        // PGlite standard queries expect arrays for text[] columns
+
+        await tx.query(
+          `INSERT INTO pins (id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           ON CONFLICT (id) DO UPDATE SET
+             lat = EXCLUDED.lat,
+             lng = EXCLUDED.lng,
+             type = EXCLUDED.type,
+             tags = EXCLUDED.tags,
+             description = EXCLUDED.description,
+             photo_urls = EXCLUDED.photo_urls,
+             expires_at = EXCLUDED.expires_at,
+             updated_at = EXCLUDED.updated_at`,
+          [
+            pin.id,
+            pin.map_id,
+            pin.lat,
+            pin.lng,
+            pin.type,
+            pin.tags || [],
+            pin.description,
+            pin.photo_urls || [],
+            pin.expires_at,
+            pin.created_at,
+            pin.updated_at
+          ]
+        );
+      }
+    });
+
+    console.log(`📥 Polled and synced ${pins.length} pins from API`);
+  } catch (error) {
+    console.warn('⚠️ Polling sync failed:', error);
   }
 }

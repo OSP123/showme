@@ -5,10 +5,11 @@ set -e
 export PGDATA="/var/lib/postgresql/data/pgdata"
 
 # Initialize PostgreSQL if data directory is empty
+chown -R postgres:postgres /var/lib/postgresql/data
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
     echo "Initializing PostgreSQL database in $PGDATA..."
     mkdir -p "$PGDATA"
-    chown -R postgres:postgres /var/lib/postgresql/data
+    # chown was here, moved up to ensure volume root is accessible every time
     su postgres -c "/usr/lib/postgresql/17/bin/initdb -D $PGDATA"
     
     # Start PostgreSQL temporarily to run init scripts

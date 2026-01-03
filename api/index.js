@@ -36,6 +36,12 @@ app.post('/api/maps', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO maps (id, name, is_private, access_token, fuzzing_enabled, fuzzing_radius, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name,
+         is_private = EXCLUDED.is_private,
+         access_token = EXCLUDED.access_token,
+         fuzzing_enabled = EXCLUDED.fuzzing_enabled,
+         fuzzing_radius = EXCLUDED.fuzzing_radius
        RETURNING *`,
       [mapId, name, is_private, access_token, fuzzing_enabled, fuzzing_radius, timestamp]
     );
@@ -79,6 +85,16 @@ app.post('/api/pins', async (req, res) => {
     const result = await pool.query(
       `INSERT INTO pins (id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (id) DO UPDATE SET
+         map_id = EXCLUDED.map_id,
+         lat = EXCLUDED.lat,
+         lng = EXCLUDED.lng,
+         type = EXCLUDED.type,
+         tags = EXCLUDED.tags,
+         description = EXCLUDED.description,
+         photo_urls = EXCLUDED.photo_urls,
+         expires_at = EXCLUDED.expires_at,
+         updated_at = EXCLUDED.updated_at
        RETURNING *`,
       [pinId, map_id, lat, lng, type, tags, description, photo_urls, expires_at, timestamp, updateTimestamp]
     );
@@ -88,6 +104,23 @@ app.post('/api/pins', async (req, res) => {
   } catch (error) {
     console.error('Error creating pin:', error);
     res.status(500).json({ error: 'Failed to create pin' });
+  }
+});
+
+// Get pins by map_id (Polling Fallback)
+app.get('/api/pins', async (req, res) => {
+  try {
+    const { map_id } = req.query;
+
+    if (!map_id) {
+      return res.status(400).json({ error: 'map_id query parameter is required' });
+    }
+
+    const result = await pool.query('SELECT * FROM pins WHERE map_id = $1 ORDER BY created_at DESC', [map_id]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error getting pins:', error);
+    res.status(500).json({ error: 'Failed to get pins' });
   }
 });
 

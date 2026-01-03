@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createMap, addPin, getPins } from './api';
+import { createMap, addPin, getPins, syncPinsFromApi } from './api';
 import type { PGliteWithSync } from '@electric-sql/pglite-sync';
 import type { PinData } from './models';
 
@@ -11,7 +11,7 @@ vi.mock('./operationQueue', () => ({
 }));
 
 // Mock fetch
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 
 describe('API Functions', () => {
   let mockDb: PGliteWithSync;
@@ -23,10 +23,11 @@ describe('API Functions', () => {
     mockDb = {
       query: vi.fn(),
       exec: vi.fn(),
+      transaction: vi.fn(async (cb) => cb({ query: vi.fn() })),
     } as any;
 
     // Mock successful fetch responses
-    (global.fetch as any).mockResolvedValue({
+    (globalThis.fetch as any).mockResolvedValue({
       ok: true,
       status: 200,
       text: async () => '',
@@ -54,8 +55,8 @@ describe('API Functions', () => {
       );
 
       // Verify PostgREST call
-      expect(global.fetch).toHaveBeenCalledWith(
-        'http://example.com/maps',
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/maps',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -73,7 +74,7 @@ describe('API Functions', () => {
     });
 
     it('should queue operation if PostgREST fails', async () => {
-      (global.fetch as any).mockResolvedValueOnce({
+      (globalThis.fetch as any).mockResolvedValueOnce({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -183,7 +184,7 @@ describe('API Functions', () => {
     });
 
     it('should queue operation if PostgREST fails', async () => {
-      (global.fetch as any).mockResolvedValueOnce({
+      (globalThis.fetch as any).mockResolvedValueOnce({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -357,6 +358,58 @@ describe('API Functions', () => {
       // Find tags in params
       const tagsIndex = params.findIndex((p: any) => Array.isArray(p) && p.includes('danger'));
       expect(params[tagsIndex]).toEqual(['danger', 'urgent']);
+    });
+    describe('syncPinsFromApi', () => {
+      it('should fetch pins and upsert them into local db', async () => {
+        const mockApiPins = [
+          {
+            id: 'pin-1',
+            map_id: 'test-map',
+            lat: 10,
+            lng: 10,
+            type: 'medical',
+            tags: [],
+            description: 'Synced pin',
+            photo_urls: [],
+            created_at: '2024-01-01',
+            updated_at: '2024-01-01'
+          }
+        ];
+
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockApiPins
+        });
+
+        // Capture the transaction callback to verify queries
+        const mockTxQuery = vi.fn();
+        (mockDb.transaction as any).mockImplementation(async (cb: any) => {
+          await cb({ query: mockTxQuery });
+        });
+
+        await syncPinsFromApi(mockDb, 'test-map');
+
+        // Verify Fetch
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('/api/pins?map_id=test-map')
+        );
+
+        // Verify DB Upsert
+        expect(mockTxQuery).toHaveBeenCalledWith(
+          expect.stringContaining('INSERT INTO pins'),
+          expect.arrayContaining(['pin-1', 'test-map', 'medical'])
+        );
+      });
+
+      it('should do nothing if api returns error', async () => {
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: false,
+          status: 500
+        });
+
+        await syncPinsFromApi(mockDb, 'test-map');
+        expect(mockDb.transaction).not.toHaveBeenCalled();
+      });
     });
   });
 });

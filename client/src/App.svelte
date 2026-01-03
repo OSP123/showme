@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import CreateMap from '$lib/CreateMap.svelte';
   import MapView   from '$lib/MapView.svelte';
   import PinLayer  from '$lib/PinLayer.svelte';
@@ -13,7 +13,7 @@
   import EncryptionTest from '$lib/EncryptionTest.svelte';
   import NotificationBell from '$lib/NotificationBell.svelte';
   import { initLocalDb }    from '$lib/db/pglite';
-  import { createMap, addPin, updatePin, getPins, getMap } from '$lib/api';
+  import { createMap, addPin, updatePin, getPins, getMap, syncPinsFromApi } from '$lib/api';
   import type { Map as GLMap }  from 'maplibre-gl';
   import type { PinData, MapRow, PinType, PinRow } from '$lib/models';
   import { notifications, getPinTypeEmoji } from '$lib/notifications';
@@ -101,15 +101,31 @@
     }
   });
 
+  let isMapLoading = false;
+
   async function loadMapData() {
     if (!db || !mapId) return;
     
+    isMapLoading = true;
     try {
-      mapData = await getMap(db, mapId);
+      // Poll for map availability (Server-First Sync Architecture)
+      // We wait up to 10 seconds for the map to sync from the server
+      const maxRetries = 20; 
+      const retryDelay = 500; // ms
       
-      // If map doesn't exist, clear mapId and show CreateMap screen
+      for (let i = 0; i < maxRetries; i++) {
+        mapData = await getMap(db, mapId);
+        if (mapData) {
+          isMapLoading = false;
+          return; // Map found!
+        }
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
+      
+      // If map still doesn't exist after timeout, clear mapId and show CreateMap screen
       if (!mapData) {
-        console.warn(`⚠️ Map ${mapId} does not exist, clearing from URL`);
+        console.warn(`⚠️ Map ${mapId} does not exist after timeout, clearing from URL`);
         mapId = '';
         const url = new URL(window.location.href);
         url.searchParams.delete('map');
@@ -122,8 +138,38 @@
       const url = new URL(window.location.href);
       url.searchParams.delete('map');
       window.history.replaceState({}, '', url);
+    } finally {
+      isMapLoading = false;
+    }
+
+  }
+
+  // Polling Sync Implementation
+  let pollingInterval: any = null;
+
+  function startPolling() {
+    stopPolling();
+    if (db && mapId) {
+       console.log('🔄 Starting polling sync for map:', mapId);
+       // Initial sync
+       syncPinsFromApi(db, mapId);
+       // Interval sync (every 4 seconds)
+       pollingInterval = setInterval(() => {
+         syncPinsFromApi(db, mapId);
+       }, 4000);
     }
   }
+
+  function stopPolling() {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+  }
+
+  onDestroy(() => {
+    stopPolling();
+  });
 
   async function handleCreate(event: CustomEvent<{ name: string; isPrivate: boolean }>) {
     console.log('Creating map with:', event.detail);
@@ -308,6 +354,7 @@
   // Reactive: load map data when mapId changes
   $: if (mapId && db) {
     loadMapData();
+    startPolling();
   }
 
   console.log('Environment check:', {
@@ -491,19 +538,6 @@
     min-height: 44px;
   }
 
-  .encryption-btn:hover {
-    background: #f5f5f5;
-  }
-
-  .encryption-panel {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    z-index: 100;
-    max-width: 400px;
-    width: calc(100% - 32px);
-  }
-
   @media (max-width: 480px) {
     .encryption-btn {
       padding: 10px;
@@ -516,6 +550,38 @@
       width: calc(100% - 16px);
       max-width: none;
     }
+  }
+
+  .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    font-family: sans-serif;
+    color: #333;
+    font-weight: 500;
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 12px;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 </style>
 
@@ -640,4 +706,11 @@
     on:wiped={handlePanicWipeComplete}
     on:cancel={() => showPanicWipe = false}
   />
+  
+  {#if isMapLoading}
+    <div class="loading-overlay">
+      <div class="spinner"></div>
+      <p>Syncing Map...</p>
+    </div>
+  {/if}
 </main>

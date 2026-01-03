@@ -137,4 +137,35 @@ describe('API Endpoints - Client ID Handling', () => {
                 .expect(500);
         });
     });
+
+    describe('GET /api/pins', () => {
+        it('should return pins for a specific map', async () => {
+            const mapId = 'map-123';
+            const mockPins = [
+                { id: 'pin-1', map_id: mapId, lat: 10, lng: 10 },
+                { id: 'pin-2', map_id: mapId, lat: 20, lng: 20 }
+            ];
+
+            mockQuery.mockResolvedValueOnce({
+                rows: mockPins
+            });
+
+            const response = await request(app)
+                .get('/api/pins')
+                .query({ map_id: mapId })
+                .expect(200);
+
+            expect(response.body).toEqual(mockPins);
+            expect(mockQuery).toHaveBeenCalledWith(
+                expect.stringContaining('SELECT * FROM pins WHERE map_id = $1'),
+                [mapId]
+            );
+        });
+
+        it('should return 400 when map_id query param is missing', async () => {
+            await request(app)
+                .get('/api/pins')
+                .expect(400);
+        });
+    });
 });

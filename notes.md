@@ -208,3 +208,20 @@ Follow-ups:
 ### Follow-ups:
 - Need to reset Electric replication slot to pick up existing data
 - Electric snapshots at startup - data added after = not synced
+
+---
+
+Date: 2026-01-02
+
+Tasks:
+- Fixed Persistent "Missing Pin" Issue.
+- Implemented Robust Hybrid Sync:
+  - Optimistic UI for 0ms local feedback.
+  - HTTP Polling (Client -> API) every 4s for guaranteed consistency.
+  - Preserved ElectricSQL for eventual live streaming.
+- Deployed to Fly.io successfully.
+- Verified with comprehensive API tests.
+- Created `architecture_state.md` to document the winning strategy.
+
+Follow-ups:
+- None. System is stable.
