@@ -79,6 +79,7 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for free hosting options including Railway,
 - PostgreSQL with PostGIS
 - ElectricSQL sync server
 - PostgREST (HTTP API for PostgreSQL)
+- Express.js API (Custom endpoints for Poll/Push)
 - Nginx (reverse proxy)
 
 **Infrastructure:**
@@ -89,7 +90,10 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for free hosting options including Railway,
 
 1. **Local Database**: Each client runs PGLite (PostgreSQL in the browser) for offline-first operation
 2. **Sync Engine**: ElectricSQL syncs maps between server and clients in real-time
-3. **Pin Sync**: PostgREST API handles pin writes with polling fallback for real-time updates
+3. **Hybrid Sync**:
+    - **Optimistic UI**: Local PGLite writes for instant feedback.
+    - **Reliability**: Express API (`GET /api/pins`) handles robust polling fallback (4s interval) to ensure consistency even if replication lags.
+    - **Replication**: ElectricSQL handles live streaming (best-effort).
 4. **Offline Support**: Operation queue retries failed operations when connection is restored
 5. **Encryption**: Sensitive data is encrypted at rest in IndexedDB using Web Crypto API
 
