@@ -84,8 +84,10 @@
           disabled={disabled}
         >
           <span class="template-icon">{template.icon}</span>
-          <span class="template-name">{template.name}</span>
-          <span class="template-desc">{template.description}</span>
+          <div class="template-info">
+            <span class="template-name">{template.name}</span>
+            <span class="template-desc">{template.description}</span>
+          </div>
         </button>
       {/each}
     </div>
@@ -273,12 +275,13 @@
 
   /* Mobile optimizations */
   @media (max-width: 480px) {
-    .create-map-container {
+    .controls {
       padding: 20px 16px;
       max-width: calc(100vw - 32px);
+      margin: 16px;
     }
 
-    .create-map-header h1 {
+    h2 {
       font-size: 24px;
     }
 
@@ -289,17 +292,27 @@
 
     .template-card {
       padding: 16px;
+      flex-direction: row;
+      text-align: left;
+      align-items: flex-start;
+      gap: 16px;
     }
 
     .template-icon {
       font-size: 28px;
+      margin-bottom: 0;
+    }
+
+    .template-info {
+        display: flex;
+        flex-direction: column;
     }
 
     .template-name {
       font-size: 16px;
     }
 
-    .template-description {
+    .template-desc {
       font-size: 13px;
     }
 

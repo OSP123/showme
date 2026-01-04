@@ -393,11 +393,15 @@
   
   .create-map-container {
     display: flex;
-    align-items: center;
+    align-items: flex-start; /* Changed from center to allow scrolling */
     justify-content: center;
     width: 100%;
-    height: 100%;
+    height: 100vh; /* changed from 100% to ensure full viewport */
     background-color: white;
+    overflow-y: auto; /* Allow vertically scrolling */
+    -webkit-overflow-scrolling: touch;
+    padding: 20px 0; /* Add top/bottom padding */
+    box-sizing: border-box; 
   }
 
   .map-controls {
