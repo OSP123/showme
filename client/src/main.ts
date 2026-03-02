@@ -6,7 +6,7 @@ import App from './App.svelte';
 // Disabled until Sentry is configured
 // initMonitoring();
 
-console.log('🚀 Mobile Fix Version: 2026-01-04 00:23');
+console.log('🚀 Mobile Fix Version: 2026-01-04 01:21 - Hamburger Menu');
 console.log('📱 Checking mobile responsiveness...');
 
 const app = new App({

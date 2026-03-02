@@ -22,10 +22,10 @@ describe('OperationQueue', () => {
       clear: vi.fn(),
     };
 
-    global.localStorage = mockLocalStorage as any;
+    globalThis.localStorage = mockLocalStorage as any;
 
     // Mock window.addEventListener
-    global.window = {
+    globalThis.window = {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     } as any;
@@ -38,7 +38,7 @@ describe('OperationQueue', () => {
     });
 
     // Mock fetch
-    global.fetch = vi.fn();
+    globalThis.fetch = vi.fn();
 
     // Create a new queue instance
     queue = new OperationQueue();
@@ -78,7 +78,7 @@ describe('OperationQueue', () => {
 
   describe('processQueue', () => {
     it('should process successful operations', async () => {
-      (global.fetch as any).mockResolvedValue({
+      (globalThis.fetch as any).mockResolvedValue({
         ok: true,
         status: 200,
       });
@@ -89,7 +89,7 @@ describe('OperationQueue', () => {
       await queue.processQueue();
 
       expect(queue.getQueueLength()).toBe(0);
-      expect(global.fetch).toHaveBeenCalledWith(
+      expect(globalThis.fetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/maps'),
         expect.objectContaining({
           method: 'POST',
@@ -99,7 +99,7 @@ describe('OperationQueue', () => {
     });
 
     it('should retry failed operations', async () => {
-      (global.fetch as any)
+      (globalThis.fetch as any)
         .mockResolvedValueOnce({ ok: false, status: 500 })
         .mockResolvedValueOnce({ ok: true, status: 200 });
 
@@ -128,7 +128,7 @@ describe('OperationQueue', () => {
     });
 
     it('should remove operations after max retries', async () => {
-      (global.fetch as any).mockResolvedValue({ ok: false, status: 500 });
+      (globalThis.fetch as any).mockResolvedValue({ ok: false, status: 500 });
 
       await queue.enqueue('createMap', { id: 'map-1' });
 
@@ -171,7 +171,7 @@ describe('OperationQueue', () => {
 
       await queue.processQueue();
 
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
       expect(queue.getQueueLength()).toBe(1);
     });
   });
@@ -253,7 +253,7 @@ describe('OperationQueue', () => {
 
       // Set up mocks: map check succeeds, first pin call fails, second succeeds
       let pinCallCount = 0;
-      (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
+      (globalThis.fetch as any).mockImplementation(async (url: string, options?: any) => {
         const urlStr = typeof url === 'string' ? url : '';
 
         // Map check call
@@ -306,7 +306,7 @@ describe('OperationQueue', () => {
       await vi.advanceTimersByTimeAsync(100);
 
       // Get all fetch calls
-      const allFetchCalls = (global.fetch as any).mock.calls || [];
+      const allFetchCalls = (globalThis.fetch as any).mock.calls || [];
 
       // Filter for pin POST calls (exclude map check GET calls)
       const pinCalls = allFetchCalls.filter((call: any[]) => {
@@ -350,7 +350,7 @@ describe('OperationQueue', () => {
       // Set up mocks with implementation function
       let mapCheckDone = false;
       let pinCallCount = 0;
-      (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
+      (globalThis.fetch as any).mockImplementation(async (url: string, options?: any) => {
         const urlStr = typeof url === 'string' ? url : '';
 
         // Map check call
@@ -404,7 +404,7 @@ describe('OperationQueue', () => {
       await vi.advanceTimersByTimeAsync(100);
 
       // Get all fetch calls to debug
-      const allFetchCalls = (global.fetch as any).mock.calls || [];
+      const allFetchCalls = (globalThis.fetch as any).mock.calls || [];
 
       // Filter for pin POST calls (exclude map check GET calls)
       const pinCalls = allFetchCalls.filter((call: any[]) => {
@@ -444,14 +444,14 @@ describe('OperationQueue', () => {
       };
 
       // Mock map exists check
-      (global.fetch as any).mockResolvedValueOnce({
+      (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         json: async () => [{ id: 'map-1' }],
       });
 
       let pinCallCount = 0;
       // Mock map check + pin calls
-      (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
+      (globalThis.fetch as any).mockImplementation(async (url: string, options?: any) => {
         const urlStr = typeof url === 'string' ? url : '';
 
         // Map check call
@@ -520,11 +520,11 @@ describe('OperationQueue', () => {
       };
 
       // Map doesn't exist (empty array means map not found)
-      (global.fetch as any).mockImplementation(async (url: string, options?: any) => {
+      (globalThis.fetch as any).mockImplementation(async (url: string, options?: any) => {
         const urlStr = typeof url === 'string' ? url : '';
 
         // Map check call - returns empty array (map doesn't exist)
-        if (urlStr.includes('/maps?id=eq.')) {
+        if (urlStr.includes('/maps/map-1') || urlStr.includes('/maps?id=eq.')) {
           return {
             ok: true,
             json: async () => [], // Map not found
@@ -558,7 +558,7 @@ describe('OperationQueue', () => {
       expect(queue.getQueueLength()).toBe(1);
 
       // Should not have called /pins endpoint (only map check should be called)
-      const allCalls = (global.fetch as any).mock.calls || [];
+      const allCalls = (globalThis.fetch as any).mock.calls || [];
       const pinCalls = allCalls.filter((call: any[]) => {
         if (!call || !call[0]) return false;
         const url = typeof call[0] === 'string' ? call[0] : '';

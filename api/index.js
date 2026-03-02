@@ -110,13 +110,23 @@ app.post('/api/pins', async (req, res) => {
 // Get pins by map_id (Polling Fallback)
 app.get('/api/pins', async (req, res) => {
   try {
-    const { map_id } = req.query;
+    const { map_id, after } = req.query;
 
     if (!map_id) {
       return res.status(400).json({ error: 'map_id query parameter is required' });
     }
 
-    const result = await pool.query('SELECT * FROM pins WHERE map_id = $1 ORDER BY created_at DESC', [map_id]);
+    let query = 'SELECT * FROM pins WHERE map_id = $1';
+    const params = [map_id];
+
+    if (after) {
+      query += ' AND updated_at > $2';
+      params.push(after);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
     console.error('Error getting pins:', error);

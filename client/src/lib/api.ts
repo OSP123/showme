@@ -256,9 +256,12 @@ export async function addPin(
 
   // Calculate expiration time (TTL) based on pin type
   let expiresAt: string | null = null;
-  if (data.type && PIN_TTL_HOURS[data.type]) {
+
+  const ttlHours = data.type ? PIN_TTL_HOURS[data.type] : undefined;
+
+  if (ttlHours !== undefined) {
     const expirationDate = new Date();
-    expirationDate.setHours(expirationDate.getHours() + PIN_TTL_HOURS[data.type]);
+    expirationDate.setHours(expirationDate.getHours() + ttlHours);
     expiresAt = expirationDate.toISOString();
   } else if (data.expires_at) {
     expiresAt = data.expires_at;
@@ -523,24 +526,57 @@ export async function getAllMaps(
  * Polling Sync Fallback: Fetch pins from API and merge into local DB.
  * This ensures that even if ElectricSQL replication lags or fails, the client eventually gets the data.
  */
-export async function syncPinsFromApi(db: PGliteWithSync, mapId: string): Promise<void> {
+/**
+ * Polling Sync Fallback: Fetch pins from API and merge into local DB.
+ * returns array of NEW pins that were added (for notifications)
+ */
+export async function syncPinsFromApi(
+  db: PGliteWithSync,
+  mapId: string,
+  after?: string
+): Promise<PinData[]> {
+  const newPinsFound: PinData[] = [];
   try {
-    const response = await fetch(`${API_URL}/api/pins?map_id=${mapId}`);
-    if (!response.ok) return;
+    let url = `${API_URL}/api/pins?map_id=${mapId}`;
+    if (after) {
+      url += `&after=${after}`;
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) return [];
 
     const pins = await response.json();
-    if (!Array.isArray(pins) || pins.length === 0) return;
-
-    // Decrypt if necessary (though usually the API sends raw encrypted data, and we decrypt on read)
-    // Actually, PGlite stores encrypted data. The API returns what's in Postgres.
-    // If the data in Postgres is encrypted (it should be if encryption is on), we just store it as is.
+    if (!Array.isArray(pins) || pins.length === 0) return [];
 
     // Batch upsert into local DB
     // We transactionally insert/update all fetched pins
+
+    // First, check which ones are NEW to this client (for notifications)
+    // We do this by checking if ID exists
+    const idsToCheck = pins.map(p => p.id);
+    const placeholders = idsToCheck.map((_, i) => `$${i + 1}`).join(',');
+
+    let existingIds: Set<string> = new Set();
+
+    try {
+      if (idsToCheck.length > 0) {
+        const existingRes = await db.query(
+          `SELECT id FROM pins WHERE id IN (${placeholders})`,
+          idsToCheck
+        );
+        existingRes.rows.forEach((row: any) => existingIds.add(row.id));
+      }
+    } catch (e) {
+      console.warn('Failed to check existing IDs:', e);
+    }
+
     await db.transaction(async (tx) => {
       for (const pin of pins) {
-        // Prepare tags and photo_urls as Postgres array literals or JSON strings depending on PGlite expectation
-        // PGlite standard queries expect arrays for text[] columns
+
+        // Identify new pins
+        if (!existingIds.has(pin.id)) {
+          newPinsFound.push(pin);
+        }
 
         await tx.query(
           `INSERT INTO pins (id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at)
@@ -571,8 +607,10 @@ export async function syncPinsFromApi(db: PGliteWithSync, mapId: string): Promis
       }
     });
 
-    console.log(`📥 Polled and synced ${pins.length} pins from API`);
+    console.log(`📥 Polled ${pins.length} pins from API (${newPinsFound.length} new)`);
+    return newPinsFound;
   } catch (error) {
     console.warn('⚠️ Polling sync failed:', error);
+    return [];
   }
 }

@@ -1,0 +1,14 @@
+node_modules
+client/node_modules
+api/node_modules
+.git
+.env
+.DS_Store
+dist
+client/dist
+coverage
+client/coverage
+.svelte-kit
+client/.svelte-kit
+.vercel
+client/.vercel

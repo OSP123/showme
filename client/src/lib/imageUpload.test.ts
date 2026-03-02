@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { compressImage, uploadToCloudinary } from './imageUpload';
+import * as config from './config';
+
+// Mock config
+vi.mock('./config', () => ({
+    getEnv: vi.fn()
+}));
 
 // Mock browser-image-compression
 vi.mock('browser-image-compression', () => ({
@@ -10,14 +16,17 @@ vi.mock('browser-image-compression', () => ({
 }));
 
 // Mock fetch
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 
 describe('Image Upload', () => {
     beforeEach(() => {
         vi.clearAllMocks();
 
+        // Default mock for getEnv
+        (config.getEnv as any).mockReturnValue(undefined);
+
         // Mock successful Cloudinary response
-        (global.fetch as any).mockResolvedValue({
+        (globalThis.fetch as any).mockResolvedValue({
             ok: true,
             json: async () => ({
                 secure_url: 'https://res.cloudinary.com/test/image/upload/v1/test.jpg',
@@ -53,18 +62,21 @@ describe('Image Upload', () => {
 
             const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
 
-            await expect(compressImage(file)).rejects.toThrow('Compression failed');
+            const result = await compressImage(file);
+
+            // Should return original file on error
+            expect(result).toBe(file);
         });
     });
 
     describe('uploadToCloudinary', () => {
         it('should upload a file to Cloudinary', async () => {
             // Mock environment variables
-            const originalEnv = import.meta.env;
-            (import.meta as any).env = {
-                VITE_CLOUDINARY_CLOUD_NAME: 'test-cloud',
-                VITE_CLOUDINARY_UPLOAD_PRESET: 'test-preset'
-            };
+            (config.getEnv as any).mockImplementation((key: string) => {
+                if (key === 'VITE_CLOUDINARY_CLOUD_NAME') return 'test-cloud';
+                if (key === 'VITE_CLOUDINARY_UPLOAD_PRESET') return 'test-preset';
+                return undefined;
+            });
 
             const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
 
@@ -76,42 +88,33 @@ describe('Image Upload', () => {
                 thumbnail: expect.stringContaining('w_200,h_200')
             });
 
-            expect(global.fetch).toHaveBeenCalledWith(
+            expect(globalThis.fetch).toHaveBeenCalledWith(
                 'https://api.cloudinary.com/v1_1/test-cloud/image/upload',
                 expect.objectContaining({
                     method: 'POST',
                     body: expect.any(FormData)
                 })
             );
-
-            // Restore
-            (import.meta as any).env = originalEnv;
         });
 
         it('should throw error if Cloudinary not configured', async () => {
-            const originalEnv = import.meta.env;
-            (import.meta as any).env = {
-                VITE_CLOUDINARY_CLOUD_NAME: undefined,
-                VITE_CLOUDINARY_UPLOAD_PRESET: undefined
-            };
+            (config.getEnv as any).mockReturnValue(undefined);
 
             const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
 
             await expect(uploadToCloudinary(file)).rejects.toThrow(
                 'Cloudinary not configured'
             );
-
-            (import.meta as any).env = originalEnv;
         });
 
         it('should handle upload errors', async () => {
-            const originalEnv = import.meta.env;
-            (import.meta as any).env = {
-                VITE_CLOUDINARY_CLOUD_NAME: 'test-cloud',
-                VITE_CLOUDINARY_UPLOAD_PRESET: 'test-preset'
-            };
+            (config.getEnv as any).mockImplementation((key: string) => {
+                if (key === 'VITE_CLOUDINARY_CLOUD_NAME') return 'test-cloud';
+                if (key === 'VITE_CLOUDINARY_UPLOAD_PRESET') return 'test-preset';
+                return undefined;
+            });
 
-            (global.fetch as any).mockResolvedValueOnce({
+            (globalThis.fetch as any).mockResolvedValueOnce({
                 ok: false,
                 statusText: 'Upload failed',
                 text: async () => 'Upload error details'
@@ -120,46 +123,40 @@ describe('Image Upload', () => {
             const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
 
             await expect(uploadToCloudinary(file)).rejects.toThrow('Upload failed');
-
-            (import.meta as any).env = originalEnv;
         });
 
         it('should include file in FormData', async () => {
-            const originalEnv = import.meta.env;
-            (import.meta as any).env = {
-                VITE_CLOUDINARY_CLOUD_NAME: 'test-cloud',
-                VITE_CLOUDINARY_UPLOAD_PRESET: 'test-preset'
-            };
+            (config.getEnv as any).mockImplementation((key: string) => {
+                if (key === 'VITE_CLOUDINARY_CLOUD_NAME') return 'test-cloud';
+                if (key === 'VITE_CLOUDINARY_UPLOAD_PRESET') return 'test-preset';
+                return undefined;
+            });
 
             const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
 
             await uploadToCloudinary(file);
 
-            const fetchCall = (global.fetch as any).mock.calls[0];
+            const fetchCall = (globalThis.fetch as any).mock.calls[0];
             const formData = fetchCall[1].body as FormData;
 
             expect(formData.get('file')).toBe(file);
             expect(formData.get('upload_preset')).toBe('test-preset');
-
-            (import.meta as any).env = originalEnv;
         });
     });
 
     describe('error handling', () => {
         it('should handle network errors', async () => {
-            const originalEnv = import.meta.env;
-            (import.meta as any).env = {
-                VITE_CLOUDINARY_CLOUD_NAME: 'test-cloud',
-                VITE_CLOUDINARY_UPLOAD_PRESET: 'test-preset'
-            };
+            (config.getEnv as any).mockImplementation((key: string) => {
+                if (key === 'VITE_CLOUDINARY_CLOUD_NAME') return 'test-cloud';
+                if (key === 'VITE_CLOUDINARY_UPLOAD_PRESET') return 'test-preset';
+                return undefined;
+            });
 
-            (global.fetch as any).mockRejectedValueOnce(new Error('Network error'));
+            (globalThis.fetch as any).mockRejectedValueOnce(new Error('Network error'));
 
             const file = new File(['data'], 'test.jpg', { type: 'image/jpeg' });
 
             await expect(uploadToCloudinary(file)).rejects.toThrow('Network error');
-
-            (import.meta as any).env = originalEnv;
         });
     });
 });

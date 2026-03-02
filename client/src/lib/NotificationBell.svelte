@@ -24,16 +24,9 @@
   }
 </script>
 
-<div class="notification-container">
-  <button class="notification-bell" on:click={() => open = !open} title="Notifications">
-    🔔
-    {#if unreadCount > 0}
-      <span class="badge">{unreadCount}</span>
-    {/if}
-  </button>
-
+<div class="notification-container-panel">
   {#if open}
-    <div class="notification-panel">
+    <div class="notification-panel-content">
       <div class="panel-header">
         <h3>Notifications</h3>
         <div class="header-actions">
@@ -43,7 +36,6 @@
           {#if $notifications.length > 0}
             <button class="text-btn" on:click={clearAll}>Clear all</button>
           {/if}
-          <button class="close-btn" on:click={() => open = false}>×</button>
         </div>
       </div>
 
@@ -78,57 +70,8 @@
 </div>
 
 <style>
-  .notification-container {
-    position: relative;
-  }
-
-  .notification-bell {
-    position: relative;
+  .notification-panel-content {
     background: white;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 20px;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    min-width: 44px;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .notification-bell:hover {
-    background: #f5f5f5;
-  }
-
-  .badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    background: #dc3545;
-    color: white;
-    border-radius: 10px;
-    padding: 2px 6px;
-    font-size: 11px;
-    font-weight: 600;
-    min-width: 18px;
-    text-align: center;
-  }
-
-  .notification-panel {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
-    width: 400px;
-    max-width: calc(100vw - 32px);
-    max-height: 500px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    display: flex;
-    flex-direction: column;
-    z-index: 1000;
   }
 
   .panel-header {
@@ -162,21 +105,6 @@
 
   .text-btn:hover {
     text-decoration: underline;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    padding: 0;
-    width: 24px;
-    height: 24px;
-    color: #666;
-  }
-
-  .close-btn:hover {
-    color: #333;
   }
 
   .notifications-list {
@@ -240,15 +168,5 @@
     background: #4a90e2;
     flex-shrink: 0;
     margin-top: 6px;
-  }
-
-  @media (max-width: 480px) {
-    .notification-panel {
-      position: fixed;
-      top: 60px;
-      right: 8px;
-      left: 8px;
-      width: auto;
-    }
   }
 </style>

@@ -401,6 +401,46 @@ describe('API Functions', () => {
         );
       });
 
+      it('should support incremental sync with after param', async () => {
+        const after = '2024-01-02T00:00:00Z';
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: async () => []
+        });
+
+        await syncPinsFromApi(mockDb, 'test-map', after);
+
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+          expect.stringContaining(`&after=${encodeURIComponent(after).replace(/%3A/g, ':')}`) // simple check for presence
+        );
+      });
+
+      it('should identify and return new pins', async () => {
+        const mockApiPins = [
+          { id: 'new-pin', map_id: 'test-map', lat: 0, lng: 0, type: 'water' },
+          { id: 'old-pin', map_id: 'test-map', lat: 1, lng: 1, type: 'food' }
+        ];
+
+        (globalThis.fetch as any).mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockApiPins
+        });
+
+        // Mock DB query to say 'old-pin' exists but 'new-pin' does not
+        const mockQuery = vi.fn().mockImplementation((query, params) => {
+          if (query.includes('SELECT id FROM pins')) {
+            return { rows: [{ id: 'old-pin' }] };
+          }
+          return { rows: [] };
+        });
+        (mockDb.query as any) = mockQuery;
+
+        const result = await syncPinsFromApi(mockDb, 'test-map');
+
+        expect(result).toHaveLength(1);
+        expect((result[0] as any).id).toBe('new-pin');
+      });
+
       it('should do nothing if api returns error', async () => {
         (globalThis.fetch as any).mockResolvedValueOnce({
           ok: false,

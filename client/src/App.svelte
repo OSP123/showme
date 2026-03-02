@@ -18,21 +18,41 @@
   import type { PinData, MapRow, PinType, PinRow } from '$lib/models';
   import { notifications, getPinTypeEmoji } from '$lib/notifications';
 
+  // Synchronous initialization to prevent flash
+  const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  let mapId = urlParams.get('map') || '';
+  
   let db: any;
-  let mapId = '';
   let mapInstance: GLMap | null = null;
   let mapData: MapRow | null = null;
   let showCreatePin = false;
   let showQuickPin = false;
   let pinLocation: { lat: number; lng: number } | null = null;
   let selectedPinTypes: PinType[] = [];
-  let showFilter = false;
-  let showPanicWipe = false;
-  let showEncryptionSetup = false;
+  
+  // Modal State Management
+  type ModalState = 'menu' | 'filter' | 'share' | 'encryption' | 'notifications' | 'panic' | null;
+  let activeModal: ModalState = null;
+
   let editMode = false;
   let editPinId: string | null = null;
   let editPinData: Partial<PinData> | null = null;
-  let showNotifications = false;
+  let showNotifications = false; // Kept for binding compatibility, controlled via activeModal
+
+  function closeAllModals() {
+    activeModal = null;
+    showNotifications = false;
+  }
+
+  function toggleModal(modal: ModalState) {
+    if (activeModal === modal) {
+      closeAllModals();
+    } else {
+      activeModal = modal;
+      if (modal === 'notifications') showNotifications = true;
+    }
+  }
+  let showMobileMenu = false;
 
   // OpenStreetMap raster style
   const osmStyle = {
@@ -77,27 +97,9 @@
       // Ignore if module not found
     }
     
-    // Check if there's a mapId in the URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlMapId = urlParams.get('map');
-    if (urlMapId) {
-      mapId = urlMapId;
+    // Check if there's a mapId already set (from synchronous check)
+    if (mapId) {
       await loadMapData();
-    } else {
-      // If no mapId in URL, try to load the first available map
-      try {
-        const result = await db.query('SELECT id FROM maps ORDER BY created_at DESC LIMIT 1');
-        if (result.rows.length > 0) {
-          mapId = result.rows[0].id;
-          // Update URL to include the map ID
-          const url = new URL(window.location.href);
-          url.searchParams.set('map', mapId);
-          window.history.replaceState({}, '', url);
-          await loadMapData();
-        }
-      } catch (error) {
-        console.error('Failed to load first map:', error);
-      }
     }
   });
 
@@ -146,16 +148,52 @@
 
   // Polling Sync Implementation
   let pollingInterval: any = null;
+  let lastSyncTimestamp: string | undefined = undefined;
+
+  async function performSync() {
+    if (!db || !mapId) return;
+    
+    const newPins = await syncPinsFromApi(db, mapId, lastSyncTimestamp);
+    
+    if (newPins && newPins.length > 0) {
+      // Update timestamp to the latest pin's updated_at or created_at
+      // Find the most recent timestamp
+      const latestPin = newPins.reduce((prev, current) => {
+        const prevDate = new Date(prev.updated_at || prev.created_at || 0);
+        const currDate = new Date(current.updated_at || current.created_at || 0);
+        return prevDate > currDate ? prev : current;
+      });
+      
+      const newTimestamp = latestPin.updated_at || latestPin.created_at;
+      if (newTimestamp) {
+        lastSyncTimestamp = newTimestamp;
+      }
+      
+      // Notify for new pins
+      newPins.forEach(pin => {
+        notifications.add({
+          type: 'pin_added',
+          pinType: pin.type || 'other',
+          emoji: getPinTypeEmoji(pin.type),
+          message: `New ${pin.type || 'pin'} added by another user`
+        });
+      });
+    }
+  }
 
   function startPolling() {
     stopPolling();
     if (db && mapId) {
        console.log('🔄 Starting polling sync for map:', mapId);
-       // Initial sync
-       syncPinsFromApi(db, mapId);
+       
+       // Initial sync to get all pins (or fill local DB)
+       // We pass undefined as timestamp effectively to fetch all (or use a stored timestamp if we persisted it, but for now we fetch all on load to be safe)
+       lastSyncTimestamp = undefined;
+       performSync();
+
        // Interval sync (every 4 seconds)
        pollingInterval = setInterval(() => {
-         syncPinsFromApi(db, mapId);
+         performSync();
        }, 4000);
     }
   }
@@ -347,10 +385,6 @@
     };
   }
 
-  function handlePanicWipeComplete() {
-    showPanicWipe = false;
-  }
-
   // Reactive: load map data when mapId changes
   $: if (mapId && db) {
     loadMapData();
@@ -404,156 +438,178 @@
     box-sizing: border-box; 
   }
 
+  /* --- Desktop / Default Styles --- */
+
+  /* Map Controls Container (Desktop: Top-Left Vertical Stack) */
   .map-controls {
     position: absolute;
     top: 16px;
     left: 16px;
-    z-index: 100;
     display: flex;
-    gap: 8px;
     flex-direction: column;
-  }
-
-  @media (max-width: 480px) {
-    .map-controls {
-      top: 8px;
-      left: 8px;
-      gap: 6px;
-    }
-
-    .new-map-btn {
-      padding: 10px 14px;
-      font-size: 13px;
-      gap: 4px;
-      min-width: 44px;
-    }
-
-    .filter-toggle-btn {
-      padding: 10px;
-      font-size: 20px;
-      gap: 0;
-      min-width: 44px; /* Minimum touch target size */
-      justify-content: center;
-    }
-
-    .filter-toggle-btn span:last-child {
-      display: none; /* Hide "Filter" text on mobile, show only icon */
-    }
-
-    .panic-btn {
-      padding: 10px 14px;
-      font-size: 13px;
-      gap: 4px;
-      min-width: 44px; /* Minimum touch target size */
-    }
-
-    .filter-panel {
-      top: 8px;
-      left: 8px;
-      margin-top: 50px;
-    }
-  }
-
-  .new-map-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    touch-action: manipulation;
-    min-height: 44px;
-  }
-
-  .new-map-btn:hover {
-    background: #2563eb;
-  }
-
-  .filter-toggle-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    background: white;
-    color: #333;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    touch-action: manipulation; /* Prevent double-tap zoom */
-  }
-
-  .filter-toggle-btn:hover {
-    background: #f5f5f5;
-  }
-
-  .panic-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    background: #dc2626;
-    color: white;
-    border: 1px solid #b91c1c;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    touch-action: manipulation; /* Prevent double-tap zoom */
-    min-height: 44px; /* Minimum touch target size */
-  }
-
-  .panic-btn:hover {
-    background: #b91c1c;
-  }
-
-  .filter-panel {
-    position: absolute;
-    top: 16px;
-    left: 16px;
-    margin-top: 60px;
+    gap: 8px;
     z-index: 100;
   }
 
-  .encryption-btn {
+  /* Buttons Common Styles */
+  .new-map-btn, .filter-toggle-btn, .panic-btn, .encryption-btn, .share-btn-menu, .notification-btn {
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 6px;
     padding: 8px 12px;
     background: white;
-    color: #333;
     border: 1px solid #ddd;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 18px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    touch-action: manipulation;
-    min-width: 44px;
-    min-height: 44px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+    height: 40px;
+    white-space: nowrap;
+    color: #333;
   }
 
-  @media (max-width: 480px) {
-    .encryption-btn {
-      padding: 10px;
-      font-size: 20px;
-    }
+  .new-map-btn:hover, .filter-toggle-btn:hover, .panic-btn:hover, .encryption-btn:hover, .share-btn-menu:hover, .notification-btn:hover {
+    background: #f5f5f5;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  }
 
-    .encryption-panel {
-      top: 8px;
-      right: 8px;
-      width: calc(100% - 16px);
-      max-width: none;
-    }
+  /* Specific Button Colors */
+  .new-map-btn, .share-btn-menu {
+    background: #4a90e2;
+    color: white;
+    border: none;
+  }
+  .new-map-btn:hover, .share-btn-menu:hover {
+    background: #357abd;
+  }
+
+  .panic-btn {
+    background: #dc3545;
+    color: white;
+    border: none;
+  }
+  .panic-btn:hover {
+    background: #bd2130;
+  }
+  
+  /* Notification Button Special Styling */
+  .notification-btn {
+    position: relative;
+    padding: 8px;
+    justify-content: center;
+    min-width: 40px;
+  }
+  
+  .notification-btn {
+    font-size: 0; /* Hide text on desktop */
+  }
+  .notification-btn span:first-child {
+    font-size: 18px; /* Visible icon */
+  }
+  .notification-btn .badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #dc3545;
+    color: white;
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    min-width: 16px;
+    text-align: center;
+  }
+
+  /* Desktop Panels - Modal Style for Consistency */
+  .filter-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 2000;
+    max-width: 350px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  .encryption-panel, .share-panel-modal, .notification-panel-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 2000;
+    max-width: 400px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  /* Mobile Header & Hamburger (Hidden on Desktop) */
+  .mobile-header {
+    display: none;
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 200;
+  }
+
+  .hamburger-btn {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    color: #333;
+  }
+
+  .mobile-menu-header {
+    display: none;
+  }
+
+  .close-menu-btn {
+    display: none;
+  }
+  
+  .close-panel-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #f0f0f0;
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #333;
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.5);
+    z-index: 1500;
+    backdrop-filter: blur(2px);
   }
 
   .loading-overlay {
@@ -567,7 +623,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    z-index: 2000;
+    z-index: 3000;
     font-family: sans-serif;
     color: #333;
     font-weight: 500;
@@ -587,6 +643,103 @@
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
   }
+
+  /* --- Mobile Overrides (Max-Width 480px) --- */
+  @media (max-width: 480px) {
+    .map-container {
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+    }
+
+    /* Show Hamburger */
+    .mobile-header {
+      display: block;
+    }
+
+    /* Hide default controls, show drawer styles when open */
+    .map-controls {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: white;
+      z-index: 2500;
+      padding: 24px;
+      box-sizing: border-box;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    .map-controls.mobile-open {
+      display: flex;
+    }
+
+    .mobile-menu-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    .mobile-menu-header h3 {
+      margin: 0;
+      font-size: 1.2rem;
+      color: #333;
+    }
+    .close-menu-btn {
+      display: block;
+      background: none;
+      border: none;
+      font-size: 32px;
+      color: #666;
+      padding: 0 8px;
+    }
+
+    /* Full width buttons in menu */
+    .new-map-btn, .filter-toggle-btn, .panic-btn, .encryption-btn, .share-btn-menu, .notification-btn {
+      width: 100% !important;
+      justify-content: flex-start;
+      padding: 16px;
+      font-size: 16px;
+      min-height: 54px;
+      margin: 0;
+    }
+
+    /* Show text labels in mobile menu */
+    .notification-btn {
+      font-size: 16px; /* Restore text size */
+      justify-content: flex-start;
+    }
+    .notification-btn span:first-child {
+      font-size: 20px;
+    }
+    .notification-btn .badge {
+      top: 18px;
+      right: 16px;
+    }
+
+    /* Panel Adjustments for Mobile */
+    .filter-panel, .encryption-panel, .share-panel-modal, .notification-panel-modal {
+      width: 90%;
+      max-width: 350px; /* Keep strict max-width on mobile */
+      padding-top: 40px; /* Space for close X */
+      top: 50%;
+      left: 50%;
+      right: auto; /* Clear any conflicting right props */
+      transform: translate(-50%, -50%); /* Ensure centering */
+      margin: 0;
+      position: fixed;
+    }
+
+    .encryption-btn {
+      padding: 10px;
+      font-size: 20px;
+    }
+  }
 </style>
 
 <main>
@@ -598,7 +751,18 @@
     <div class="map-container">
       <SyncStatus {db} />
       
-      <div class="map-controls">
+      <div class="mobile-header">
+        <button class="hamburger-btn" on:click={() => toggleModal('menu')}>
+          ☰
+        </button>
+      </div>
+
+      <div class="map-controls" class:mobile-open={activeModal === 'menu'}>
+        <div class="mobile-menu-header">
+          <h3>Menu</h3>
+          <button class="close-menu-btn" on:click={closeAllModals}>×</button>
+        </div>
+
         <button 
           class="new-map-btn" 
           on:click={() => {
@@ -606,48 +770,61 @@
             const url = new URL(window.location.href);
             url.searchParams.delete('map');
             window.history.pushState({}, '', url);
+            closeAllModals();
           }}
           title="Create a new map"
         >
           ➕ New Map
         </button>
         {#if mapData}
-          <ShareMap
-            mapId={mapId}
-            accessToken={mapData.access_token}
-            isPrivate={mapData.is_private === 'true'}
-          />
+          <button 
+            class="share-btn-menu" 
+            on:click={() => toggleModal('share')}
+          >
+            <span>🔗</span> Share Map
+          </button>
         {/if}
-        <button class="filter-toggle-btn" on:click={() => showFilter = !showFilter}>
+        <button class="filter-toggle-btn" on:click={() => toggleModal('filter')}>
           <span>🔍</span>
           Filter
         </button>
         <button 
           class="panic-btn" 
-          on:click={() => showPanicWipe = true}
+          on:click={() => toggleModal('panic')}
           title="Emergency data wipe"
         >
-          🚨 Wipe
+          🚨 Wipe Data
         </button>
         <button 
           class="encryption-btn" 
-          on:click={() => showEncryptionSetup = !showEncryptionSetup}
+          on:click={() => toggleModal('encryption')}
           title="Database encryption settings"
         >
-          🔒
+          <span>🔒</span> Encryption
         </button>
-        <NotificationBell bind:open={showNotifications} />
+        
+        <button 
+          class="notification-btn" 
+          on:click={() => toggleModal('notifications')} 
+        >
+          <span>🔔</span> Notifications
+          {#if $notifications.filter(n => !n.read).length > 0}
+            <span class="badge">{$notifications.filter(n => !n.read).length}</span>
+          {/if}
+        </button>
       </div>
 
-      {#if showEncryptionSetup}
+      {#if activeModal === 'encryption'}
         <div class="encryption-panel">
+          <button class="close-panel-btn" on:click={closeAllModals}>×</button>
           <EncryptionSetup />
           <EncryptionTest />
         </div>
       {/if}
 
-      {#if showFilter}
+      {#if activeModal === 'filter'}
         <div class="filter-panel">
+          <button class="close-panel-btn" on:click={closeAllModals}>×</button>
           <PinFilter
             bind:selectedTypes={selectedPinTypes}
             on:filterChange={(e) => {
@@ -655,6 +832,30 @@
             }}
           />
         </div>
+      {/if}
+      
+      {#if activeModal === 'share' && mapData}
+        <div class="share-panel-modal">
+          <button class="close-panel-btn" on:click={closeAllModals}>×</button>
+          <ShareMap
+            mapId={mapId}
+            accessToken={mapData.access_token}
+            isPrivate={mapData.is_private === 'true'}
+            open={true}
+          />
+        </div>
+      {/if}
+      
+      {#if activeModal === 'notifications'}
+        <div class="notification-panel-modal">
+          <button class="close-panel-btn" on:click={closeAllModals}>×</button>
+          <NotificationBell open={true} />
+        </div>
+      {/if}
+      
+      <!-- Shared Backdrop for any modal -->
+      {#if activeModal && activeModal !== 'menu'}
+        <div class="modal-backdrop" on:click={closeAllModals}></div>
       {/if}
 
       <MapView
@@ -706,9 +907,12 @@
   <!-- PanicWipe should be available regardless of map state -->
   <PanicWipe
     {db}
-    open={showPanicWipe}
-    on:wiped={handlePanicWipeComplete}
-    on:cancel={() => showPanicWipe = false}
+    open={activeModal === 'panic'}
+    on:wiped={() => {
+      // PanicWipe component handles reload, just close modal locally if needed
+      closeAllModals();
+    }}
+    on:cancel={closeAllModals}
   />
   
   {#if isMapLoading}

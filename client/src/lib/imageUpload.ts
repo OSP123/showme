@@ -1,8 +1,7 @@
 // Image upload and processing utilities
 import imageCompression from 'browser-image-compression';
+import { getEnv } from './config';
 
-const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_PHOTOS_PER_PIN = 5;
 
@@ -55,17 +54,20 @@ export async function compressImage(file: File): Promise<File> {
 
 // Upload to Cloudinary
 export async function uploadToCloudinary(file: File): Promise<UploadResult> {
-    if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+    const cloudName = getEnv('VITE_CLOUDINARY_CLOUD_NAME');
+    const uploadPreset = getEnv('VITE_CLOUDINARY_UPLOAD_PRESET');
+
+    if (!cloudName || !uploadPreset) {
         throw new Error('Cloudinary not configured. Set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET');
     }
 
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    formData.append('upload_preset', uploadPreset);
     formData.append('folder', 'showme-pins'); // Organize uploads
 
     const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
         {
             method: 'POST',
             body: formData,
@@ -175,7 +177,7 @@ export async function queueOfflineUpload(file: File, pinId: string): Promise<voi
     });
 }
 
-// Process offline upload queue
+// Process offline queue - export for testing if needed
 export async function processOfflineQueue(): Promise<void> {
     const queue = JSON.parse(localStorage.getItem('photoUploadQueue') || '[]');
 
@@ -193,7 +195,7 @@ export async function processOfflineQueue(): Promise<void> {
             // Upload
             const result = await uploadToCloudinary(file);
 
-            // TODO: Update pin with photo URL
+            // TODO: Update pin with photo URL (needs backend endpoint)
             console.log(`✅ Uploaded queued photo for pin ${item.pinId}:`, result.url);
 
             // Remove from queue
@@ -202,12 +204,11 @@ export async function processOfflineQueue(): Promise<void> {
 
         } catch (error) {
             console.error('Failed to process queued upload:', error);
-            // Keep in queue for retry
         }
     }
 }
 
-// Listen for online event to process queue
+// Listen for online event
 if (typeof window !== 'undefined') {
     window.addEventListener('online', () => {
         console.log('📡 Back online, processing photo upload queue...');

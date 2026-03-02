@@ -225,3 +225,49 @@ Tasks:
 
 Follow-ups:
 - None. System is stable.
+
+Date: 2026-01-04
+
+Tasks:
+- Fixed mobile responsiveness for "Create Map" screen in CreateMap.svelte.
+- Enabled scrolling in App.svelte main container.
+- Deployed changes to Fly.io manually (fly deploy) after fixing build context with .dockerignore.
+- Validated deployment with version logging.
+
+Follow-ups:
+- None
+- Also fixed default map selection logic: Removed auto-loading of latest map to ensure "Create Map" screen is always accessible on root URL.
+- Fixed mobile menu layout: Converted control bar to horizontal scroll and centralized all popup panels (Share, Filter, Notifications, Encryption) as modals with backdrops.
+- Refined mobile menu: Replaced horizontal scroll with a proper Hamburger Menu (drawer) to fix readability and "squished" layout issues.
+
+---
+
+Date: 2026-01-05
+
+Tasks:
+- Addressed user feedback regarding notifications, expiry, map loading, and syncing.
+- Implemented global notifications for new pins by detecting changes during polling sync.
+- Removed default expiry for 'Water' pins (set to infinite).
+- Fixed "Create Map" flash by implementing synchronous map ID detection from URL.
+- Optimized pin syncing by introducing `after` query parameter to fetch only incremental updates.
+- Verified changes with successful client build.
+
+Follow-ups:
+- Monitor sync efficiency in production to verify bandwidth savings.
+- Verify notification reliability in multi-user scenarios.
+
+---
+
+Date: 2026-01-05
+
+Tasks:
+- Fixed critical Docker connectivity issues (`net::ERR_EMPTY_RESPONSE`):
+  - Corrected `nginx.conf` to listen on port 80 (matching `compose.yaml` map 3013:80), replacing incorrect 8080.
+  - Updated `nginx.conf` proxy targets to use Docker service names (`api`, `electric`) instead of `localhost`.
+  - Configured Nginx to proxy `/` to the `showme` frontend service instead of serving empty static files.
+- Fixed `ShareMap` component runtime error:
+  - Added missing `getShareUrl` and `copyLink` helpers to `ShareMap.svelte` to resolve "function not defined" crash.
+- Verified connectivity using `curl` from host to Nginx container.
+
+Follow-ups:
+- Ensure `ShareMap` properly handles close events (currently relies on binding).

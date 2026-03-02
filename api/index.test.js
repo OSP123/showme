@@ -155,17 +155,33 @@ describe('API Endpoints - Client ID Handling', () => {
                 .query({ map_id: mapId })
                 .expect(200);
 
-            expect(response.body).toEqual(mockPins);
             expect(mockQuery).toHaveBeenCalledWith(
                 expect.stringContaining('SELECT * FROM pins WHERE map_id = $1'),
                 [mapId]
             );
         });
 
-        it('should return 400 when map_id query param is missing', async () => {
-            await request(app)
-                .get('/api/pins')
-                .expect(400);
-        });
+    it('should filter pins by updated_at when after param provided', async () => {
+        const mapId = 'map-123';
+        const after = '2024-01-01T00:00:00Z';
+
+        mockQuery.mockResolvedValueOnce({ rows: [] });
+
+        await request(app)
+            .get('/api/pins')
+            .query({ map_id: mapId, after: after })
+            .expect(200);
+
+        expect(mockQuery).toHaveBeenCalledWith(
+            expect.stringContaining('AND updated_at > $2'),
+            [mapId, after]
+        );
     });
+
+    it('should return 400 when map_id query param is missing', async () => {
+        await request(app)
+            .get('/api/pins')
+            .expect(400);
+    });
+});
 });

@@ -27,7 +27,7 @@ export interface PinRow {
 }
 
 /** Pin type/category for quick categorization */
-export type PinType = 
+export type PinType =
   | 'medical'
   | 'water'
   | 'checkpoint'
@@ -49,9 +49,10 @@ export interface PinData {
 }
 
 /** Pin TTL configuration per type (in hours) */
-export const PIN_TTL_HOURS: Record<PinType, number> = {
+// Use undefined/null for no expiry
+export const PIN_TTL_HOURS: Partial<Record<PinType, number>> = {
   medical: 24,      // Medical facilities: 24 hours
-  water: 12,        // Water sources: 12 hours
+  // water: undefined, // Water sources: No expiry
   checkpoint: 2,    // Checkpoints: 2 hours (fastest expiration)
   shelter: 24,      // Shelters: 24 hours
   food: 12,         // Food sources: 12 hours

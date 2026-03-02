@@ -12,7 +12,7 @@ vi.mock('./operationQueue', () => ({
 }));
 
 // Mock fetch
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 
 describe('API Functions - Phase 3 Features', () => {
   let mockDb: PGliteWithSync;
@@ -27,7 +27,7 @@ describe('API Functions - Phase 3 Features', () => {
     } as any;
 
     // Mock successful fetch responses
-    (global.fetch as any).mockResolvedValue({
+    (globalThis.fetch as any).mockResolvedValue({
       ok: true,
       status: 200,
       text: async () => '',
@@ -211,14 +211,14 @@ describe('API Functions - Phase 3 Features', () => {
       });
 
       // Mock fetch for map existence check - map exists
-      (global.fetch as any).mockResolvedValueOnce({
+      (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => [{ id: 'test-map-id' }],
       });
 
       // Mock fetch for pin creation
-      (global.fetch as any).mockResolvedValueOnce({
+      (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         status: 201,
         text: async () => '',
@@ -227,7 +227,7 @@ describe('API Functions - Phase 3 Features', () => {
       await addPin(mockDb, pinData);
 
       // Check PostgREST call for pin creation (should be second fetch)
-      const fetchCalls = (global.fetch as any).mock.calls;
+      const fetchCalls = (globalThis.fetch as any).mock.calls;
       const postgresCall = fetchCalls.find((call: any[]) =>
         call[0].includes('/pins')
       );
@@ -334,14 +334,14 @@ describe('API Functions - Phase 3 Features', () => {
       });
 
       // Mock fetch for map existence check - map exists
-      (global.fetch as any).mockResolvedValueOnce({
+      (globalThis.fetch as any).mockResolvedValueOnce({
         ok: true,
         status: 200,
         json: async () => [{ id: 'test-map-id' }],
       });
 
       // First pin creation call fails with column error
-      (global.fetch as any)
+      (globalThis.fetch as any)
         .mockResolvedValueOnce({
           ok: false,
           status: 400,
@@ -362,7 +362,7 @@ describe('API Functions - Phase 3 Features', () => {
       expect(result).toHaveProperty('id');
 
       // Should have called PostgREST twice
-      const fetchCalls = (global.fetch as any).mock.calls.filter((call: any[]) =>
+      const fetchCalls = (globalThis.fetch as any).mock.calls.filter((call: any[]) =>
         call[0].includes('/pins')
       );
       expect(fetchCalls).toHaveLength(2);
@@ -387,7 +387,7 @@ describe('API Functions - Phase 3 Features', () => {
       };
 
       // Both calls fail
-      (global.fetch as any)
+      (globalThis.fetch as any)
         .mockResolvedValueOnce({
           ok: false,
           status: 400,
@@ -423,7 +423,9 @@ describe('API Functions - Phase 3 Features', () => {
       );
 
       const queuedData = (operationQueue.enqueue as any).mock.calls[0][1];
-      expect(queuedData.type).toBeUndefined();
+      expect(queuedData.type).toBe('water');
+      // expires_at might be undefined/null depending on TTL logic for water (which is now null)
+      // The test setup used 'water' which now has no TTL.
       expect(queuedData.expires_at).toBeUndefined();
     });
   });
