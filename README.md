@@ -17,13 +17,8 @@ Collaboratively pin locations on a map. Built for crisis response, community map
 - **Pin Filtering**: Filter pins by type to focus on specific resources
 - **Pin Clustering**: Automatic clustering for large datasets (10+ pins)
 - **Pin TTL (Time-To-Live)**: Auto-expiration based on pin type:
-  - Medical: 24h
-  - Water: 12h
-  - Checkpoint: 2h
-  - Shelter: 24h
-  - Food: 12h
-  - Danger: 6h
-  - Other: 24h
+  - Medical: 24h, Checkpoint: 2h, Shelter: 24h, Food: 12h, Danger: 6h, Other: 24h
+  - Water: no expiry
 
 ### Security & Privacy
 - **Encrypted Local Database**: AES-GCM encryption for sensitive data stored locally
@@ -60,144 +55,148 @@ make logs      # View logs
 make ps        # Check service status
 ```
 
-### Deployment
+### Deploy to Fly.io
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for free hosting options including Railway, Render, and Fly.io.
+ShowMe deploys as a single all-in-one container on [Fly.io](https://fly.io). PostgreSQL, ElectricSQL, the Express API, and Nginx all run inside one machine managed by supervisord.
+
+**Prerequisites:**
+- [Fly CLI](https://fly.io/docs/flyctl/install/) installed
+- A Fly.io account (`fly auth signup`)
+
+**1. Fork and clone:**
+```bash
+git clone https://github.com/<your-username>/showme.git
+cd showme
+```
+
+**2. Create the app and storage volume:**
+```bash
+fly launch --no-deploy            # Creates the app (accept defaults or pick your region)
+fly volumes create showme_db_data --region <your-region> --size 1
+```
+
+**3. (Optional) Set a strong database password:**
+```bash
+fly secrets set POSTGRES_PASSWORD=<your-password>
+```
+If you skip this, the default from `Dockerfile.allinone` is used — fine for testing but change it for production.
+
+**4. Deploy:**
+```bash
+fly deploy
+```
+
+The first deploy takes a few minutes to build. Once done, your app is live at `https://<your-app-name>.fly.dev`.
+
+**5. (Optional) Photo uploads — configure Cloudinary:**
+```bash
+fly secrets set VITE_CLOUDINARY_CLOUD_NAME=<your-cloud-name>
+fly secrets set VITE_CLOUDINARY_UPLOAD_PRESET=<your-upload-preset>
+fly deploy   # Rebuild to bake env vars into the frontend
+```
+
+**Useful commands:**
+```bash
+fly logs              # Tail production logs
+fly status            # Check machine status
+fly ssh console       # SSH into the running machine
+fly deploy            # Deploy latest changes
+```
+
+**What's inside the container:**
+
+| Service       | Port | Role                                   |
+|---------------|------|----------------------------------------|
+| PostgreSQL 17 | 5432 | Database with PostGIS + logical replication |
+| ElectricSQL   | 3000 | Real-time sync engine                  |
+| Express API   | 4000 | REST API for maps/pins                 |
+| Nginx         | 8080 | Reverse proxy (the external port)      |
+
+All managed by supervisord. Database data persists on the Fly volume.
 
 ## Architecture
 
 ### Technology Stack
 
-**Frontend:**
-- Svelte 4 with TypeScript
-- MapLibre GL JS for map rendering
-- PGLite (local PostgreSQL in browser)
-- ElectricSQL for real-time sync
-- Vite for build tooling
+**Frontend:** Svelte 4, TypeScript, MapLibre GL JS, PGLite, ElectricSQL, Vite
 
-**Backend:**
-- PostgreSQL with PostGIS
-- ElectricSQL sync server
-- PostgREST (HTTP API for PostgreSQL)
-- Express.js API (Custom endpoints for Poll/Push)
-- Nginx (reverse proxy)
-
-**Infrastructure:**
-- Docker Compose for local development
-- All services containerized
+**Backend:** PostgreSQL + PostGIS, ElectricSQL, Express.js API, Nginx
 
 ### How It Works
 
 1. **Local Database**: Each client runs PGLite (PostgreSQL in the browser) for offline-first operation
-2. **Sync Engine**: ElectricSQL syncs maps between server and clients in real-time
-3. **Hybrid Sync**:
-    - **Optimistic UI**: Local PGLite writes for instant feedback.
-    - **Reliability**: Express API (`GET /api/pins`) handles robust polling fallback (4s interval) to ensure consistency even if replication lags.
-    - **Replication**: ElectricSQL handles live streaming (best-effort).
-4. **Offline Support**: Operation queue retries failed operations when connection is restored
-5. **Encryption**: Sensitive data is encrypted at rest in IndexedDB using Web Crypto API
+2. **Hybrid Sync**:
+    - **Optimistic UI**: Local PGLite writes for instant feedback
+    - **Polling**: Express API polls every 4s for consistency
+    - **Replication**: ElectricSQL streams changes in real-time (best-effort)
+3. **Offline Support**: Operation queue retries failed operations when connection is restored
+4. **Encryption**: Sensitive data is encrypted at rest in IndexedDB using Web Crypto API
 
 ### Data Flow
 
 ```
-User Action → Local PGLite → PostgREST API → PostgreSQL
-                ↓
-         ElectricSQL Sync
-                ↓
-         Other Clients (Real-time)
+User Action → Local PGLite → Express API → PostgreSQL
+                                              ↓
+                                      ElectricSQL Sync
+                                              ↓
+                                      Other Clients
 ```
 
 ## Project Structure
 
 ```
 showme/
-├── client/                 # Frontend Svelte application
+├── client/                  # Frontend Svelte app
 │   ├── src/
-│   │   ├── lib/           # Core components and utilities
-│   │   │   ├── db/        # Database and encryption
-│   │   │   ├── *.svelte   # UI components
-│   │   │   └── *.ts       # Utilities and API
+│   │   ├── lib/             # Components, API, utilities
+│   │   │   ├── db/          # Database and encryption
+│   │   │   ├── *.svelte     # UI components
+│   │   │   └── *.ts         # API, models, utils
 │   │   └── main.ts
 │   └── package.json
-├── migrations/            # Database schema migrations
-├── compose.yaml           # Docker Compose configuration
-├── Dockerfile             # Frontend build container
-└── README.md
+├── api/                     # Express.js REST API
+│   ├── index.js
+│   └── index.test.js
+├── migrations/              # PostgreSQL schema migrations
+├── compose.yaml             # Docker Compose (local dev)
+├── Dockerfile.allinone      # Production all-in-one container
+├── fly.toml                 # Fly.io configuration
+├── supervisord.conf         # Process manager for production
+├── docker-entrypoint.sh     # Container initialization script
+└── nginx.conf               # Reverse proxy config
 ```
 
 ## Testing
 
-Comprehensive test suite with Vitest:
-
 ```bash
 cd client
-npm test              # Run tests in watch mode
-npm run test:run      # Run tests once
-npm run test:ui       # Run tests with UI
-npm run test:coverage # Generate coverage report
+pnpm test              # Run tests in watch mode
+pnpm run test:run      # Run tests once
+pnpm run test:coverage # Generate coverage report
+
+cd ../api
+npm test               # Run API endpoint tests
 ```
 
-**Test Coverage:**
-- API functions (createMap, addPin, getPins)
-- Database operations (PGLite initialization, sync setup)
-- Encryption utilities (key management, field encryption)
-- Operation queue (retry logic, persistence)
-- Pin utilities (colors, emojis, time formatting)
-- Panic wipe functionality
-- Expired pins cleanup
-- Fuzzing utilities
+## Security & Privacy
 
-## Security Features
-
-### Encryption
-
-- **AES-GCM 256-bit encryption** for sensitive fields
-- **Key Management**: Auto-generated or passphrase-derived keys
-- **Field-Level Encryption**: Encrypts descriptions, tags, photo URLs, map names
-- **Backward Compatible**: Works with unencrypted data
-
-See [ENCRYPTION_TESTING.md](./ENCRYPTION_TESTING.md) for testing encryption.
-
-### Privacy
-
-- **Location Fuzzing**: Obfuscate exact coordinates (configurable radius)
+- **AES-GCM 256-bit encryption** for sensitive fields (descriptions, tags, photo URLs, map names)
+- **Location Fuzzing**: Obfuscate exact coordinates (configurable radius per map)
 - **Panic Wipe**: Emergency deletion of all local and remote data
 - **No User Accounts**: Anonymous, link-based access
-- **Private Maps**: Optional access tokens for sensitive maps
+- **Private Maps**: Optional access tokens
+
+See [ENCRYPTION_TESTING.md](./ENCRYPTION_TESTING.md) for testing encryption.
 
 ## Development
 
 ### Adding New Features
 
-1. **Write Tests First**: Follow test-first development approach
-2. **Update Schema**: Add migrations in `migrations/` directory
-3. **Update Types**: Modify `client/src/lib/models.ts`
-4. **Implement Feature**: Add components/utilities in `client/src/lib/`
-5. **Run Tests**: Ensure all tests pass
-6. **Test Locally**: Verify with `make up`
-
-### Code Style
-
-- TypeScript strict mode
-- Svelte components with TypeScript
-- Vitest for testing
-- Follow existing patterns and conventions
-
-## Future Enhancements
-
-### Planned Features
-- **Notifications**: Email, Signal, Telegram, SMS notifications for new pins
-- **Photo Uploads**: Direct photo upload and storage
-- **User Accounts**: Optional authentication for persistent maps
-- **Map Analytics**: Usage statistics and insights
-- **Export/Import**: Map data export in various formats
-
-### Notifications (Planned)
-
-- **Email**: SMTP server integration
-- **Signal**: [signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api)
-- **Telegram**: Bot API integration
-- **SMS**: Provider integration (complex, TBD)
+1. Write tests first
+2. Add migrations in `migrations/`
+3. Update types in `client/src/lib/models.ts`
+4. Implement in `client/src/lib/`
+5. Run tests, verify with `make up`
 
 ## Contributing
 
@@ -210,9 +209,3 @@ See [ENCRYPTION_TESTING.md](./ENCRYPTION_TESTING.md) for testing encryption.
 ## License
 
 See [LICENSE.md](./LICENSE.md) for details.
-
-## Support
-
-For deployment help, see [DEPLOYMENT.md](./DEPLOYMENT.md).
-
-For encryption testing, see [ENCRYPTION_TESTING.md](./ENCRYPTION_TESTING.md).
