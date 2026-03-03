@@ -10,6 +10,8 @@ vi.mock('./operationQueue', () => ({
   },
 }));
 
+import { operationQueue } from './operationQueue';
+
 // Mock fetch
 globalThis.fetch = vi.fn();
 
@@ -359,6 +361,52 @@ describe('API Functions', () => {
       const tagsIndex = params.findIndex((p: any) => Array.isArray(p) && p.includes('danger'));
       expect(params[tagsIndex]).toEqual(['danger', 'urgent']);
     });
+
+    it('should sync photo_urls update to API via PATCH', async () => {
+      const { updatePin } = await import('./api');
+
+      (globalThis.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: 'test-pin-id' })
+      });
+
+      const updates = {
+        photo_urls: ['https://example.com/photo1.jpg']
+      };
+
+      await updatePin(mockDb, 'test-pin-id', updates);
+
+      // Should have called PATCH on the API
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/pins/test-pin-id'),
+        expect.objectContaining({
+          method: 'PATCH',
+          body: expect.stringContaining('photo_urls')
+        })
+      );
+    });
+
+    it('should queue update for retry if API PATCH fails', async () => {
+      const { updatePin } = await import('./api');
+
+      (globalThis.fetch as any).mockRejectedValueOnce(new Error('Network error'));
+
+      const updates = {
+        description: 'Offline update'
+      };
+
+      await updatePin(mockDb, 'test-pin-id', updates);
+
+      // Should have queued the operation
+      expect(operationQueue.enqueue).toHaveBeenCalledWith(
+        'updatePin',
+        expect.objectContaining({
+          pinId: 'test-pin-id',
+          description: 'Offline update'
+        })
+      );
+    });
+
     describe('syncPinsFromApi', () => {
       it('should fetch pins and upsert them into local db', async () => {
         const mockApiPins = [

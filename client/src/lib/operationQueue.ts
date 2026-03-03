@@ -1,7 +1,7 @@
 // Operation queue for retrying failed operations when offline
 interface QueuedOperation {
   id: string;
-  type: 'createMap' | 'addPin';
+  type: 'createMap' | 'addPin' | 'updatePin';
   data: any;
   timestamp: number;
   retries: number;
@@ -277,6 +277,14 @@ export class OperationQueue {
         }
 
         return true;
+      } else if (operation.type === 'updatePin') {
+        const { pinId, ...updates } = operation.data;
+        const response = await fetch(`${API_URL}/api/pins/${pinId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+        return response.ok;
       }
       return false;
     } catch (error) {

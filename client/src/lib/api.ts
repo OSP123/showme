@@ -468,7 +468,36 @@ export async function updatePin(
 
   await db.query(query, values);
 
-  console.log(`✅ Pin ${pinId} updated successfully`);
+  console.log(`✅ Pin ${pinId} updated locally`);
+
+  // Sync update to API so other clients and polling don't overwrite
+  const apiPayload: Record<string, any> = {};
+  if (updates.description !== undefined) apiPayload.description = updates.description || null;
+  if (updates.tags !== undefined) apiPayload.tags = tagsArray || [];
+  if (updates.photo_urls !== undefined) apiPayload.photo_urls = updates.photo_urls || [];
+  if (updates.type) apiPayload.type = updates.type;
+
+  if (Object.keys(apiPayload).length > 0) {
+    try {
+      const response = await fetch(`${API_URL}/api/pins/${pinId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(apiPayload)
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      console.log(`✅ Pin ${pinId} synced to API`);
+    } catch (error) {
+      console.warn(`⚠️ Failed to sync pin update to API, queueing for retry:`, error);
+      await operationQueue.enqueue('updatePin', {
+        pinId,
+        ...apiPayload
+      });
+    }
+  }
 }
 
 /**

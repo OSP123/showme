@@ -134,6 +134,54 @@ app.get('/api/pins', async (req, res) => {
   }
 });
 
+// Update pin
+app.patch('/api/pins/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    if (!updates || Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No update fields provided' });
+    }
+
+    // Build dynamic SET clause from provided fields
+    const allowedFields = ['lat', 'lng', 'type', 'tags', 'description', 'photo_urls', 'expires_at'];
+    const setClauses = ['updated_at = NOW()'];
+    const values = [];
+    let paramIndex = 1;
+
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        setClauses.push(`${field} = $${paramIndex}`);
+        values.push(updates[field]);
+        paramIndex++;
+      }
+    }
+
+    if (values.length === 0) {
+      return res.status(400).json({ error: 'No valid update fields provided' });
+    }
+
+    // Add id as last parameter
+    values.push(id);
+
+    const result = await pool.query(
+      `UPDATE pins SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Pin not found' });
+    }
+
+    console.log('Updated pin:', id);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating pin:', error);
+    res.status(500).json({ error: 'Failed to update pin' });
+  }
+});
+
 // Delete pin
 app.delete('/api/pins/:id', async (req, res) => {
   try {

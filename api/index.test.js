@@ -184,4 +184,65 @@ describe('API Endpoints - Client ID Handling', () => {
             .expect(400);
     });
 });
+
+    describe('PATCH /api/pins/:id', () => {
+        it('should update pin with provided fields', async () => {
+            const pinId = 'pin-123';
+            const updates = {
+                photo_urls: ['https://example.com/photo1.jpg'],
+                description: 'Updated description'
+            };
+
+            mockQuery.mockResolvedValueOnce({
+                rowCount: 1,
+                rows: [{ id: pinId, ...updates }]
+            });
+
+            const response = await request(app)
+                .patch(`/api/pins/${pinId}`)
+                .send(updates)
+                .expect(200);
+
+            expect(response.body.id).toBe(pinId);
+            const queryStr = mockQuery.mock.calls[0][0];
+            const queryParams = mockQuery.mock.calls[0][1];
+            expect(queryStr).toContain('UPDATE pins SET');
+            expect(queryStr).toContain('description');
+            expect(queryStr).toContain('photo_urls');
+            expect(queryParams).toContainEqual(['https://example.com/photo1.jpg']);
+        });
+
+        it('should return 400 when no fields provided', async () => {
+            await request(app)
+                .patch('/api/pins/pin-123')
+                .send({})
+                .expect(400);
+        });
+
+        it('should return 404 when pin not found', async () => {
+            mockQuery.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+            await request(app)
+                .patch('/api/pins/nonexistent')
+                .send({ description: 'test' })
+                .expect(404);
+        });
+
+        it('should ignore non-allowed fields', async () => {
+            mockQuery.mockResolvedValueOnce({
+                rowCount: 1,
+                rows: [{ id: 'pin-123', description: 'valid' }]
+            });
+
+            await request(app)
+                .patch('/api/pins/pin-123')
+                .send({ description: 'valid', id: 'hacked', map_id: 'hacked' })
+                .expect(200);
+
+            // Only description should be in SET clause, not id or map_id
+            const queryStr = mockQuery.mock.calls[0][0];
+            expect(queryStr).toContain('description');
+            expect(queryStr).not.toContain('map_id');
+        });
+    });
 });
