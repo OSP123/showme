@@ -44,7 +44,7 @@ jobs:
         run: cd api && npm ci
 
       - name: Run API tests
-        run: cd api && npm test
+        run: cd api && npx jest --forceExit
 
   deploy:
     name: Deploy to Fly.io
