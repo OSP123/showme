@@ -25,7 +25,8 @@
     "date-fns": "^4.1.0",
     "maplibre-gl": "^5.6.0",
     "supercluster": "^8.0.1",
-    "svelte": "^4.2.20"
+    "svelte": "^4.2.20",
+    "svelte-i18n": "^4.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

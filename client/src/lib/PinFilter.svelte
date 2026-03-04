@@ -1,22 +1,14 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { _ } from 'svelte-i18n';
   import type { PinType } from './models';
+  import { PIN_TYPE_DEFINITIONS } from './i18n/pinTypes';
 
   export let selectedTypes: PinType[] = [];
 
   const dispatch = createEventDispatcher<{
     filterChange: { types: PinType[] };
   }>();
-
-  const pinTypes: { value: PinType; label: string; emoji: string }[] = [
-    { value: 'medical', label: 'Medical', emoji: '🏥' },
-    { value: 'water', label: 'Water', emoji: '💧' },
-    { value: 'checkpoint', label: 'Checkpoint', emoji: '🚧' },
-    { value: 'shelter', label: 'Shelter', emoji: '🏠' },
-    { value: 'food', label: 'Food', emoji: '🍽️' },
-    { value: 'danger', label: 'Danger', emoji: '⚠️' },
-    { value: 'other', label: 'Other', emoji: '📍' },
-  ];
 
   function toggleType(type: PinType) {
     if (selectedTypes.includes(type)) {
@@ -36,12 +28,12 @@
 <div class="pin-filter">
   <div class="filter-header">
     {#if selectedTypes.length > 0}
-      <button class="clear-btn" on:click={clearFilters}>Clear</button>
+      <button class="clear-btn" on:click={clearFilters}>{$_('filter.clear')}</button>
     {/if}
   </div>
   
   <div class="filter-types">
-    {#each pinTypes as type}
+    {#each PIN_TYPE_DEFINITIONS as type}
       <button
         type="button"
         class="filter-type-btn"
@@ -49,18 +41,18 @@
         on:click={() => toggleType(type.value)}
       >
         <span class="emoji">{type.emoji}</span>
-        <span class="label">{type.label}</span>
+        <span class="label">{$_(type.labelKey)}</span>
       </button>
     {/each}
   </div>
   
   {#if selectedTypes.length > 0}
     <div class="active-filters">
-      Showing: {selectedTypes.length} {selectedTypes.length === 1 ? 'type' : 'types'}
+      {$_('filter.showingCount', { values: { count: selectedTypes.length } })}
     </div>
   {:else}
     <div class="active-filters">
-      Showing: All pins
+      {$_('filter.showingAll')}
     </div>
   {/if}
 </div>
@@ -133,7 +125,7 @@
     background: white;
     cursor: pointer;
     transition: all 0.2s;
-    text-align: left;
+    text-align: start;
     width: 100%;
     touch-action: manipulation; /* Prevent double-tap zoom */
     min-height: 44px; /* Minimum touch target size */

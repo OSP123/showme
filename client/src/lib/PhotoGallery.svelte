@@ -1,5 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { _ } from 'svelte-i18n';
+  import ConfirmModal from './ConfirmModal.svelte';
 
   export let photos: string[] = []; // Array of photo URLs
   export let thumbnails: string[] = []; // Array of thumbnail URLs
@@ -11,6 +13,7 @@
 
   let currentIndex = 0;
   let lightboxOpen = false;
+  let showDeleteConfirm = false;
 
   function openLightbox(index: number) {
     currentIndex = index;
@@ -31,14 +34,17 @@
   }
 
   function deletePhoto() {
-    if (confirm('Delete this photo?')) {
-      dispatch('delete', currentIndex);
-      
-      if (photos.length <= 1) {
-        closeLightbox();
-      } else if (currentIndex >= photos.length - 1) {
-        currentIndex = photos.length - 2;
-      }
+    showDeleteConfirm = true;
+  }
+
+  function confirmDelete() {
+    dispatch('delete', currentIndex);
+    showDeleteConfirm = false;
+
+    if (photos.length <= 1) {
+      closeLightbox();
+    } else if (currentIndex >= photos.length - 1) {
+      currentIndex = photos.length - 2;
     }
   }
 
@@ -71,9 +77,9 @@
         <button
           class="thumbnail"
           on:click={() => openLightbox(index)}
-          title="Click to view full size"
+          title={$_('photoGallery.viewFullSize')}
         >
-          <img src={thumb} alt="Photo {index + 1}" />
+          <img src={thumb} alt={$_('photoGallery.photoAlt', { values: { index: index + 1 } })} />
         </button>
       {/each}
     </div>
@@ -85,7 +91,7 @@
         </button>
 
         <button class="delete-btn" on:click|stopPropagation={deletePhoto}>
-          🗑️ Delete
+          🗑️ {$_('photoGallery.delete')}
         </button>
 
         {#if photos.length > 1}
@@ -99,7 +105,7 @@
         {/if}
 
         <div class="lightbox-content" on:click|stopPropagation>
-          <img src={photos[currentIndex]} alt="Photo {currentIndex + 1}" />
+          <img src={photos[currentIndex]} alt={$_('photoGallery.photoAlt', { values: { index: currentIndex + 1 } })} />
           
           {#if photos.length > 1}
             <div class="photo-counter">
@@ -111,6 +117,16 @@
     {/if}
   </div>
 {/if}
+
+<ConfirmModal
+  open={showDeleteConfirm}
+  title={$_('photoGallery.deleteConfirmTitle')}
+  message={$_('photoGallery.deleteConfirm')}
+  confirmLabel={$_('common.delete')}
+  variant="danger"
+  on:confirm={confirmDelete}
+  on:cancel={() => showDeleteConfirm = false}
+/>
 
 <style>
   .photo-gallery {
@@ -169,7 +185,7 @@
   .close-btn {
     position: absolute;
     top: 1rem;
-    right: 1rem;
+    inset-inline-end: 1rem;
     background: rgba(255, 255, 255, 0.2);
     border: none;
     color: white;
@@ -191,7 +207,7 @@
   .delete-btn {
     position: absolute;
     top: 1rem;
-    left: 1rem;
+    inset-inline-start: 1rem;
     background: rgba(255, 59, 48, 0.8);
     border: none;
     color: white;
@@ -229,11 +245,11 @@
   }
 
   .nav-btn.prev {
-    left: 1rem;
+    inset-inline-start: 1rem;
   }
 
   .nav-btn.next {
-    right: 1rem;
+    inset-inline-end: 1rem;
   }
 
   .lightbox-content {

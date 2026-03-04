@@ -181,6 +181,29 @@ describe('pinUtils', () => {
       const result = getTimeAgo(date);
       expect(result).toMatch(/\d+\/\d+\/\d+/); // Date format
     });
+
+    it('should use translation function when provided', () => {
+      const mockT = (key: string, opts?: any) => {
+        const values = opts?.values || {};
+        const translations: Record<string, string> = {
+          'time.justNow': 'الآن',
+          'time.minutesAgo': `منذ ${values.count} دقيقة`,
+          'time.hoursAgo': `منذ ${values.count} ساعة`,
+          'time.daysAgo': `منذ ${values.count} يوم`,
+        };
+        return translations[key] || key;
+      };
+
+      expect(getTimeAgo(new Date('2024-01-01T11:59:30Z'), mockT)).toBe('الآن');
+      expect(getTimeAgo(new Date('2024-01-01T11:45:00Z'), mockT)).toBe('منذ 15 دقيقة');
+      expect(getTimeAgo(new Date('2024-01-01T10:00:00Z'), mockT)).toBe('منذ 2 ساعة');
+      expect(getTimeAgo(new Date('2023-12-30T12:00:00Z'), mockT)).toBe('منذ 2 يوم');
+    });
+
+    it('should fallback to English without translation function', () => {
+      expect(getTimeAgo(new Date('2024-01-01T11:59:30Z'))).toBe('Just now');
+      expect(getTimeAgo(new Date('2024-01-01T11:45:00Z'))).toBe('15m ago');
+    });
   });
 });
 

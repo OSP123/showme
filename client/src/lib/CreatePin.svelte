@@ -1,6 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
+  import { _ } from 'svelte-i18n';
   import type { PinType, PinData } from './models';
+  import { PIN_TYPE_DEFINITIONS } from './i18n/pinTypes';
   import PhotoUpload from './PhotoUpload.svelte';
   import type { UploadResult } from './imageUpload';
   import { getThumbnailUrl } from './imageCache';
@@ -35,15 +37,7 @@
     }
   });
 
-  const pinTypes: { value: PinType; label: string; emoji: string }[] = [
-    { value: 'medical', label: 'Medical', emoji: '🏥' },
-    { value: 'water', label: 'Water', emoji: '💧' },
-    { value: 'checkpoint', label: 'Checkpoint', emoji: '🚧' },
-    { value: 'shelter', label: 'Shelter', emoji: '🏠' },
-    { value: 'food', label: 'Food', emoji: '🍽️' },
-    { value: 'danger', label: 'Danger', emoji: '⚠️' },
-    { value: 'other', label: 'Other', emoji: '📍' },
-  ];
+  const pinTypes = PIN_TYPE_DEFINITIONS;
 
   function addTag() {
     const trimmed = tagInput.trim();
@@ -126,10 +120,10 @@
 {#if open}
   <div class="modal-overlay" on:click={cancel} on:keydown={(e) => e.key === 'Escape' && cancel()}>
     <div class="modal-content" on:click|stopPropagation>
-      <h2>{mode === 'edit' ? 'Edit Pin' : 'Add Pin'}</h2>
-      
+      <h2>{mode === 'edit' ? $_('createPin.editPin') : $_('createPin.addPin')}</h2>
+
       <div class="form-group">
-        <label>Type</label>
+        <label>{$_('createPin.type')}</label>
         <div class="pin-type-grid">
           {#each pinTypes as type}
             <button
@@ -139,34 +133,34 @@
               on:click={() => selectedType = type.value}
             >
               <span class="emoji">{type.emoji}</span>
-              <span class="label">{type.label}</span>
+              <span class="label">{$_(type.labelKey)}</span>
             </button>
           {/each}
         </div>
       </div>
 
       <div class="form-group">
-        <label for="description">Description (optional)</label>
+        <label for="description">{$_('createPin.description')}</label>
         <textarea
           id="description"
           bind:value={description}
-          placeholder="Add details about this location..."
+          placeholder={$_('createPin.descriptionPlaceholder')}
           rows="3"
         />
       </div>
 
       <div class="form-group">
-        <label for="tags">Tags (optional)</label>
+        <label for="tags">{$_('createPin.tags')}</label>
         <div class="tag-input-group">
           <input
             id="tags"
             type="text"
             bind:value={tagInput}
             on:keydown={handleKeydown}
-            placeholder="Add a tag and press Enter"
+            placeholder={$_('createPin.tagPlaceholder')}
           />
           <button type="button" on:click={addTag} disabled={!tagInput.trim()}>
-            Add
+            {$_('createPin.addTag')}
           </button>
         </div>
         {#if tags.length > 0}
@@ -182,7 +176,7 @@
       </div>
 
       <div class="form-group">
-        <label>Photos (optional)</label>
+        <label>{$_('createPin.photos')}</label>
         <PhotoUpload 
           maxPhotos={5}
           on:upload={handlePhotoUpload}
@@ -197,12 +191,12 @@
           <div class="photos-preview">
             {#each photoUrls as url, index}
               <div class="photo-thumb">
-                <img src={getThumbnailUrl(url, 100)} alt="Photo {index + 1}" />
-                <button 
-                  type="button" 
+                <img src={getThumbnailUrl(url, 100)} alt={$_('photoGallery.photoAlt', { values: { index: index + 1 } })} />
+                <button
+                  type="button"
                   class="photo-remove"
                   on:click={() => removePhoto(index)}
-                  title="Remove photo"
+                  title={$_('createPin.removePhoto')}
                 >
                   ✕
                 </button>
@@ -214,10 +208,10 @@
 
       <div class="form-actions">
         <button type="button" class="btn-secondary" on:click={cancel}>
-          Cancel
+          {$_('common.cancel')}
         </button>
         <button type="button" class="btn-primary" on:click={submit}>
-          {mode === 'edit' ? 'Save Changes' : 'Add Pin'}
+          {mode === 'edit' ? $_('createPin.saveChanges') : $_('createPin.addPin')}
         </button>
       </div>
     </div>
@@ -477,7 +471,7 @@
   .photo-remove {
     position: absolute;
     top: 4px;
-    right: 4px;
+    inset-inline-end: 4px;
     background: rgba(0, 0, 0, 0.6);
     color: white;
     border: none;

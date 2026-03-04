@@ -17,6 +17,10 @@
   import type { Map as GLMap }  from 'maplibre-gl';
   import type { PinData, MapRow, PinType, PinRow } from '$lib/models';
   import { notifications, getPinTypeEmoji } from '$lib/notifications';
+  import { _ } from 'svelte-i18n';
+  import { locale } from 'svelte-i18n';
+  import { SUPPORTED_LOCALES } from '$lib/i18n';
+  import ConfirmModal from '$lib/ConfirmModal.svelte';
 
   // Synchronous initialization to prevent flash
   const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -38,6 +42,8 @@
   let editPinId: string | null = null;
   let editPinData: Partial<PinData> | null = null;
   let showNotifications = false; // Kept for binding compatibility, controlled via activeModal
+  let showAlertModal = false;
+  let alertMessage = '';
 
   function closeAllModals() {
     activeModal = null;
@@ -175,7 +181,7 @@
           type: 'pin_added',
           pinType: pin.type || 'other',
           emoji: getPinTypeEmoji(pin.type),
-          message: `New ${pin.type || 'pin'} added by another user`
+          message: $_('app.notification.pinAdded', { values: { type: pin.type || 'pin' } })
         });
       });
     }
@@ -270,7 +276,7 @@
         type: 'pin_added',
         pinType: pinData.type,
         emoji: getPinTypeEmoji(pinData.type),
-        message: `New ${pinData.type || 'pin'} added to map`
+        message: $_('app.notification.pinCreated', { values: { type: pinData.type || 'pin' } })
       });
       
       // Close the pin creation modal
@@ -298,7 +304,8 @@
         const url = new URL(window.location.href);
         url.searchParams.delete('map');
         window.history.replaceState({}, '', url);
-        alert('The map no longer exists. Please create a new map first.');
+        alertMessage = $_('app.mapNotExist');
+        showAlertModal = true;
         return;
       }
     } catch (error) {
@@ -322,7 +329,7 @@
         type: 'pin_added',
         pinType: pinData.type,
         emoji: getPinTypeEmoji(pinData.type),
-        message: `Quick ${pinData.type} pin added`
+        message: $_('app.notification.quickPinAdded', { values: { type: pinData.type } })
       });
       
       // Close the quick pin modal
@@ -354,7 +361,7 @@
         type: 'pin_updated',
         pinType: updates.type,
         emoji: getPinTypeEmoji(updates.type),
-        message: `Pin updated: ${updates.description?.substring(0, 30) || 'Changes saved'}`
+        message: $_('app.notification.pinUpdated', { values: { description: updates.description?.substring(0, 30) || $_('app.notification.changesSaved') } })
       });
       
       // Close the edit modal
@@ -444,7 +451,7 @@
   .map-controls {
     position: absolute;
     top: 16px;
-    left: 16px;
+    inset-inline-start: 16px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -512,7 +519,7 @@
   .notification-btn .badge {
     position: absolute;
     top: -4px;
-    right: -4px;
+    inset-inline-end: -4px;
     background: #dc3545;
     color: white;
     border-radius: 10px;
@@ -557,11 +564,40 @@
   }
 
   /* Mobile Header & Hamburger (Hidden on Desktop) */
+  .language-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    font-size: 14px;
+  }
+
+  .language-selector label {
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+  }
+
+  .language-selector select {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
+    flex: 1;
+    min-width: 0;
+  }
+
   .mobile-header {
     display: none;
     position: absolute;
     top: 16px;
-    left: 16px;
+    inset-inline-start: 16px;
     z-index: 200;
   }
 
@@ -587,7 +623,7 @@
   .close-panel-btn {
     position: absolute;
     top: 10px;
-    right: 10px;
+    inset-inline-end: 10px;
     background: #f0f0f0;
     border: none;
     border-radius: 50%;
@@ -719,7 +755,7 @@
     }
     .notification-btn .badge {
       top: 18px;
-      right: 16px;
+      inset-inline-end: 16px;
     }
 
     /* Panel Adjustments for Mobile */
@@ -759,12 +795,12 @@
 
       <div class="map-controls" class:mobile-open={activeModal === 'menu'}>
         <div class="mobile-menu-header">
-          <h3>Menu</h3>
+          <h3>{$_('app.menu.title')}</h3>
           <button class="close-menu-btn" on:click={closeAllModals}>×</button>
         </div>
 
-        <button 
-          class="new-map-btn" 
+        <button
+          class="new-map-btn"
           on:click={() => {
             mapId = '';
             const url = new URL(window.location.href);
@@ -772,46 +808,55 @@
             window.history.pushState({}, '', url);
             closeAllModals();
           }}
-          title="Create a new map"
+          title={$_('app.menu.newMapTitle')}
         >
-          ➕ New Map
+          ➕ {$_('app.menu.newMap')}
         </button>
         {#if mapData}
-          <button 
-            class="share-btn-menu" 
+          <button
+            class="share-btn-menu"
             on:click={() => toggleModal('share')}
           >
-            <span>🔗</span> Share Map
+            <span>🔗</span> {$_('app.menu.shareMap')}
           </button>
         {/if}
         <button class="filter-toggle-btn" on:click={() => toggleModal('filter')}>
           <span>🔍</span>
-          Filter
+          {$_('app.menu.filter')}
         </button>
-        <button 
-          class="panic-btn" 
+        <button
+          class="panic-btn"
           on:click={() => toggleModal('panic')}
-          title="Emergency data wipe"
+          title={$_('app.menu.wipeDataTitle')}
         >
-          🚨 Wipe Data
+          🚨 {$_('app.menu.wipeData')}
         </button>
-        <button 
-          class="encryption-btn" 
+        <button
+          class="encryption-btn"
           on:click={() => toggleModal('encryption')}
-          title="Database encryption settings"
+          title={$_('app.menu.encryptionTitle')}
         >
-          <span>🔒</span> Encryption
+          <span>🔒</span> {$_('app.menu.encryption')}
         </button>
-        
-        <button 
-          class="notification-btn" 
-          on:click={() => toggleModal('notifications')} 
+
+        <button
+          class="notification-btn"
+          on:click={() => toggleModal('notifications')}
         >
-          <span>🔔</span> Notifications
+          <span>🔔</span> {$_('app.menu.notifications')}
           {#if $notifications.filter(n => !n.read).length > 0}
             <span class="badge">{$notifications.filter(n => !n.read).length}</span>
           {/if}
         </button>
+
+        <div class="language-selector">
+          <label for="locale-select">🌐 {$_('language.selector')}</label>
+          <select id="locale-select" bind:value={$locale}>
+            {#each SUPPORTED_LOCALES as loc}
+              <option value={loc.code}>{loc.name}</option>
+            {/each}
+          </select>
+        </div>
       </div>
 
       {#if activeModal === 'encryption'}
@@ -918,7 +963,17 @@
   {#if isMapLoading}
     <div class="loading-overlay">
       <div class="spinner"></div>
-      <p>Syncing Map...</p>
+      <p>{$_('app.loading.syncingMap')}</p>
     </div>
   {/if}
+
+  <ConfirmModal
+    open={showAlertModal}
+    title={$_('common.confirm')}
+    message={alertMessage}
+    confirmLabel={$_('common.close')}
+    variant="warning"
+    on:confirm={() => showAlertModal = false}
+    on:cancel={() => showAlertModal = false}
+  />
 </main>

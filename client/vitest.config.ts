@@ -12,6 +12,11 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{js,ts}'], // Removed .svelte for now
+    server: {
+      deps: {
+        inline: ['svelte-i18n', 'intl-messageformat', '@formatjs/icu-messageformat-parser', '@formatjs/fast-memoize'],
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

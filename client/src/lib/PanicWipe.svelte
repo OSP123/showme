@@ -1,7 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { _ } from 'svelte-i18n';
   import { panicWipe, canPerformPanicWipe } from './panicWipe';
   import type { PGlite } from '@electric-sql/pglite';
+  import ConfirmModal from './ConfirmModal.svelte';
 
   export let db: PGlite | any | undefined;
   export let open = false;
@@ -14,6 +16,8 @@
   let isWiping = false;
   let confirmText = '';
   const requiredText = 'DELETE ALL';
+  let showAlert = false;
+  let alertMessage = '';
 
   async function handleWipe() {
     if (confirmText !== requiredText) {
@@ -21,13 +25,15 @@
     }
 
     if (!canPerformPanicWipe()) {
-      alert('Please wait a few seconds before performing another wipe.');
+      alertMessage = $_('panic.rateLimited');
+      showAlert = true;
       return;
     }
 
     if (!db) {
       console.error('❌ Database not available for panic wipe');
-      alert('Database not available. Please refresh the page and try again.');
+      alertMessage = $_('panic.dbUnavailable');
+      showAlert = true;
       return;
     }
 
@@ -46,7 +52,8 @@
       }, 500);
     } catch (error) {
       console.error('❌ Panic wipe failed:', error);
-      alert(`Failed to wipe data: ${error instanceof Error ? error.message : String(error)}. Please try again.`);
+      alertMessage = $_('panic.wipeFailed', { values: { error: error instanceof Error ? error.message : String(error) } });
+      showAlert = true;
       isWiping = false;
     }
   }
@@ -63,23 +70,23 @@
     <div class="panic-container" on:click|stopPropagation>
       <div class="panic-header">
         <span class="panic-icon">🚨</span>
-        <h2>Emergency Data Wipe</h2>
+        <h2>{$_('panic.title')}</h2>
       </div>
-      
+
       <div class="panic-warning">
-        <p><strong>This will permanently delete ALL local data:</strong></p>
+        <p><strong>{$_('panic.warningIntro')}</strong></p>
         <ul>
-          <li>All maps</li>
-          <li>All pins</li>
-          <li>All queued operations</li>
-          <li>All local storage</li>
+          <li>{$_('panic.allMaps')}</li>
+          <li>{$_('panic.allPins')}</li>
+          <li>{$_('panic.allQueued')}</li>
+          <li>{$_('panic.allStorage')}</li>
         </ul>
-        <p class="warning-text">This action cannot be undone!</p>
+        <p class="warning-text">{$_('panic.cannotUndo')}</p>
       </div>
 
       <div class="panic-confirm">
         <label for="confirm-input">
-          Type <strong>{requiredText}</strong> to confirm:
+          {$_('panic.typeConfirm', { values: { text: requiredText } })}
         </label>
         <input
           id="confirm-input"
@@ -98,7 +105,7 @@
           on:click={cancel}
           disabled={isWiping}
         >
-          Cancel
+          {$_('common.cancel')}
         </button>
         <button
           type="button"
@@ -106,12 +113,22 @@
           on:click={handleWipe}
           disabled={isWiping || confirmText !== requiredText}
         >
-          {isWiping ? 'Wiping...' : 'Delete All Data'}
+          {isWiping ? $_('panic.wiping') : $_('panic.deleteAll')}
         </button>
       </div>
     </div>
   </div>
 {/if}
+
+<ConfirmModal
+  open={showAlert}
+  title={$_('panic.title')}
+  message={alertMessage}
+  confirmLabel={$_('common.close')}
+  variant="warning"
+  on:confirm={() => showAlert = false}
+  on:cancel={() => showAlert = false}
+/>
 
 <style>
   .panic-overlay {
@@ -171,7 +188,7 @@
 
   .panic-warning ul {
     margin: 8px 0;
-    padding-left: 24px;
+    padding-inline-start: 24px;
     color: #991b1b;
   }
 

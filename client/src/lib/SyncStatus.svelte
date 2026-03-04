@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { _ } from 'svelte-i18n';
   import { operationQueue } from './operationQueue';
 
   export let db: any = null;
@@ -86,11 +87,11 @@
     </span>
     <span class="status-text">
       {#if syncStatus === 'synced'}
-        Synced
+        {$_('sync.synced')}
       {:else if syncStatus === 'syncing'}
-        Syncing...
+        {$_('sync.syncing')}
       {:else}
-        Offline
+        {$_('sync.offline')}
       {/if}
     </span>
     {#if queuedOperations > 0}
@@ -101,20 +102,20 @@
   {#if showDetails}
     <div class="status-details">
       <div class="detail-row">
-        <span class="detail-label">Connection:</span>
-        <span class="detail-value">{isOnline ? 'Online' : 'Offline'}</span>
+        <span class="detail-label">{$_('sync.connection')}</span>
+        <span class="detail-value">{isOnline ? $_('sync.online') : $_('sync.offline')}</span>
       </div>
       {#if queuedOperations > 0}
         <div class="detail-row">
-          <span class="detail-label">Queued:</span>
-          <span class="detail-value">{queuedOperations} operation{queuedOperations !== 1 ? 's' : ''}</span>
+          <span class="detail-label">{$_('sync.queued')}</span>
+          <span class="detail-value">{$_('sync.operations', { values: { count: queuedOperations } })}</span>
         </div>
         <div class="detail-hint">
-          Operations will sync automatically when connection is restored
+          {$_('sync.autoSync')}
         </div>
       {:else}
         <div class="detail-hint">
-          All operations synced
+          {$_('sync.allSynced')}
         </div>
       {/if}
     </div>
@@ -125,7 +126,7 @@
   .sync-status {
     position: fixed;
     top: 16px;
-    right: 16px;
+    inset-inline-end: 16px;
     z-index: 100;
   }
 
@@ -191,7 +192,7 @@
   .status-details {
     position: absolute;
     top: calc(100% + 8px);
-    right: 0;
+    inset-inline-end: 0;
     background: white;
     border-radius: 8px;
     padding: 12px;
@@ -229,7 +230,7 @@
   @media (max-width: 480px) {
     .sync-status {
       top: 8px;
-      right: 8px;
+      inset-inline-end: 8px;
     }
 
     .status-button {
@@ -238,8 +239,8 @@
     }
 
     .status-details {
-      right: 0;
-      left: auto;
+      inset-inline-end: 0;
+      inset-inline-start: auto;
       min-width: 180px;
       max-width: calc(100vw - 16px);
     }

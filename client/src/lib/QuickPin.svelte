@@ -1,7 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { _ } from 'svelte-i18n';
   import type { PinType } from './models';
-  import { PIN_TTL_HOURS } from './models';
+  import { PIN_TYPE_DEFINITIONS } from './i18n/pinTypes';
 
   export let open = false;
   export let lat: number;
@@ -13,15 +14,8 @@
     advanced: void;
   }>();
 
-  // Common pin presets for crisis scenarios
-  const quickPresets: { type: PinType; emoji: string; label: string; ttl: number }[] = [
-    { type: 'medical', emoji: '🏥', label: 'Medical', ttl: PIN_TTL_HOURS.medical },
-    { type: 'water', emoji: '💧', label: 'Water', ttl: PIN_TTL_HOURS.water },
-    { type: 'checkpoint', emoji: '🚧', label: 'Checkpoint', ttl: PIN_TTL_HOURS.checkpoint },
-    { type: 'shelter', emoji: '🏠', label: 'Shelter', ttl: PIN_TTL_HOURS.shelter },
-    { type: 'food', emoji: '🍽️', label: 'Food', ttl: PIN_TTL_HOURS.food },
-    { type: 'danger', emoji: '⚠️', label: 'Danger', ttl: PIN_TTL_HOURS.danger },
-  ];
+  // Quick presets exclude 'other' type
+  $: quickPresets = PIN_TYPE_DEFINITIONS.filter(d => d.value !== 'other');
 
   function handleQuickCreate(type: PinType) {
     dispatch('create', { type, lat, lng });
@@ -39,29 +33,31 @@
   <div class="quick-pin-overlay" on:click={cancel} on:keydown={(e) => e.key === 'Escape' && cancel()}>
     <div class="quick-pin-container" on:click|stopPropagation>
       <div class="quick-pin-header">
-        <h3>Quick Pin</h3>
-        <button class="close-btn" on:click={cancel} aria-label="Close">×</button>
+        <h3>{$_('quickPin.title')}</h3>
+        <button class="close-btn" on:click={cancel} aria-label={$_('common.close')}>×</button>
       </div>
-      <p class="quick-pin-subtitle">Tap to add a pin</p>
+      <p class="quick-pin-subtitle">{$_('quickPin.subtitle')}</p>
       <div class="quick-pin-grid">
         {#each quickPresets as preset}
           <button
             type="button"
             class="quick-pin-btn"
-            on:click={() => handleQuickCreate(preset.type)}
-            aria-label={`Add ${preset.label} pin`}
+            on:click={() => handleQuickCreate(preset.value)}
+            aria-label={$_('quickPin.addPinLabel', { values: { label: $_(preset.labelKey) } })}
           >
             <span class="quick-pin-emoji">{preset.emoji}</span>
-            <span class="quick-pin-label">{preset.label}</span>
-            <span class="quick-pin-ttl">Expires in {preset.ttl}h</span>
+            <span class="quick-pin-label">{$_(preset.labelKey)}</span>
+            <span class="quick-pin-ttl">
+              {preset.ttl ? $_('quickPin.expiresIn', { values: { hours: preset.ttl } }) : $_('quickPin.noExpiry')}
+            </span>
           </button>
         {/each}
       </div>
       <div class="quick-pin-footer">
         <button class="advanced-btn" on:click={() => dispatch('advanced')}>
-          Advanced Options
+          {$_('quickPin.advancedOptions')}
         </button>
-        <button class="cancel-btn" on:click={cancel}>Cancel</button>
+        <button class="cancel-btn" on:click={cancel}>{$_('common.cancel')}</button>
       </div>
     </div>
   </div>

@@ -1,4 +1,5 @@
 // client/src/main.ts
+import '$lib/i18n';
 import App from './App.svelte';
 // import { initMonitoring } from './lib/monitoring';
 

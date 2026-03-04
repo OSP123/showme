@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { _ } from 'svelte-i18n';
   export let mapId: string;
   export let accessToken: string | null = null;
   export let isPrivate: boolean = false;
@@ -31,22 +32,22 @@
 {#if open}
   <div class="share-panel">
     <div class="share-header">
-      <h3>Share Map</h3>
+      <h3>{$_('share.title')}</h3>
       <!-- Close button is handled by parent, but we keep this for desktop/fallback -->
     </div>
     
     <div class="share-content">
-      <label for="share-link-input">Map Link</label>
+      <label for="share-link-input">{$_('share.mapLink')}</label>
       <div class="link-input-group">
         <input type="text" readonly value={getShareUrl()} id="share-link-input" />
         <button class="copy-btn" on:click={copyLink}>
-          {copied ? '✓ Copied!' : 'Copy'}
+          {copied ? `✓ ${$_('share.copied')}` : $_('share.copy')}
         </button>
       </div>
       
       {#if isPrivate}
         <p class="private-note">
-          ⚠️ This is a private map. Share the link with the access token included.
+          ⚠️ {$_('share.privateNote')}
         </p>
       {/if}
     </div>

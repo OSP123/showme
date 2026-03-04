@@ -1,6 +1,7 @@
 <script lang="ts">
   import { uploadMultipleImages, validateImage, type UploadResult } from './imageUpload';
   import { createEventDispatcher } from 'svelte';
+  import { _ } from 'svelte-i18n';
 
   export let maxPhotos = 5;
   export let disabled = false;
@@ -36,7 +37,7 @@
     const fileArray = Array.from(files);
     
     if (fileArray.length > maxPhotos) {
-      dispatch('error', `Maximum ${maxPhotos} photos allowed`);
+      dispatch('error', $_('upload.maxExceeded', { values: { max: maxPhotos } }));
       return;
     }
 
@@ -68,7 +69,7 @@
       uploadProgress.clear();
       
     } catch (error: any) {
-      dispatch('error', error.message || 'Upload failed');
+      dispatch('error', error.message || $_('upload.failed'));
     } finally {
       uploading = false;
     }
@@ -106,16 +107,16 @@
       <div class="upload-prompt">
         <span class="icon">📷</span>
         <span class="text">
-          {dragOver ? 'Drop photos here' : 'Click or drag photos'}
+          {dragOver ? $_('upload.dropPhotos') : $_('upload.clickOrDrag')}
         </span>
-        <span class="hint">Max {maxPhotos} photos, 5MB each</span>
+        <span class="hint">{$_('upload.maxPhotos', { values: { max: maxPhotos } })}</span>
       </div>
     </label>
   {:else}
     <div class="upload-progress">
       <div class="spinner">⏳</div>
       <div class="status">
-        Uploading {Array.from(uploadProgress.keys()).length} of {files?.length || 0} photos...
+        {$_('upload.uploading', { values: { current: Array.from(uploadProgress.keys()).length, total: files?.length || 0 } })}
       </div>
       
       {#each Array.from(uploadProgress.entries()) as [index, percent]}

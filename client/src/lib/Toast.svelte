@@ -29,7 +29,7 @@
   .toast {
     position: fixed;
     bottom: 24px;
-    right: 24px;
+    inset-inline-end: 24px;
     padding: 16px 20px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -57,25 +57,25 @@
   .toast-info {
     background: #e3f2fd;
     color: #1976d2;
-    border-left: 4px solid #1976d2;
+    border-inline-start: 4px solid #1976d2;
   }
 
   .toast-success {
     background: #d4edda;
     color: #155724;
-    border-left: 4px solid #28a745;
+    border-inline-start: 4px solid #28a745;
   }
 
   .toast-warning {
     background: #fff3cd;
     color: #856404;
-    border-left: 4px solid #ffc107;
+    border-inline-start: 4px solid #ffc107;
   }
 
   .toast-danger {
     background: #f8d7da;
     color: #721c24;
-    border-left: 4px solid #dc3545;
+    border-inline-start: 4px solid #dc3545;
   }
 
   .toast-content {
@@ -103,11 +103,26 @@
     opacity: 1;
   }
 
+  :global([dir="rtl"]) .toast {
+    animation-name: slideInRtl;
+  }
+
+  @keyframes slideInRtl {
+    from {
+      transform: translateX(-400px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
   @media (max-width: 480px) {
     .toast {
       bottom: 16px;
-      right: 16px;
-      left: 16px;
+      inset-inline-end: 16px;
+      inset-inline-start: 16px;
       min-width: unset;
       max-width: unset;
     }

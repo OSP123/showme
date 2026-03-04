@@ -271,3 +271,28 @@ Tasks:
 
 Follow-ups:
 - Ensure `ShareMap` properly handles close events (currently relies on binding).
+
+---
+
+Date: 2026-03-03
+
+Tasks:
+- Implemented full i18n (internationalization) and RTL support using svelte-i18n v4.0.1
+- Created i18n foundation: index.ts (locale detection, RTL handling, localStorage persistence), en.json (~165 keys), ar.json (complete Arabic translation)
+- Created shared PIN_TYPE_DEFINITIONS module (pinTypes.ts) consolidating duplicate pin type arrays from 4 components
+- Created ConfirmModal.svelte reusable modal replacing all browser confirm()/alert() calls
+- Integrated i18n into all 13 Svelte components (except EncryptionTest.svelte, left in English)
+- Applied RTL CSS using logical properties (inset-inline-start/end, border-inline-start, text-align: start) across all components
+- Added Toast.svelte RTL animation override with slideInRtl keyframes
+- Updated pinUtils.ts getTimeAgo() to accept optional translation function
+- Translated PinLayer.svelte imperative popup code using get(_) from svelte/store
+- Added language selector (globe icon + dropdown) to App.svelte hamburger menu
+- Created skeleton locale files for 8 additional languages (fa, ur, uk, ckb, ps, ti, my, fr)
+- Updated test setup to initialize svelte-i18n, wrote pinTypes.test.ts and i18n/index.test.ts
+- Fixed vitest ESM compatibility with intl-messageformat via server.deps.inline config
+- All 167 tests passing, build succeeds
+
+Follow-ups:
+- Translate skeleton locale files (fa, ur, uk, ckb, ps, ti, my, fr) with native speakers or translation service
+- Manual verification: switch to Arabic, verify RTL layout mirrors correctly
+- Manual verification: verify localStorage persistence across page reloads

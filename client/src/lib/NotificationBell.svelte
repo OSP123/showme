@@ -1,6 +1,7 @@
 <script lang="ts">
   import { notifications, type Notification, getPinTypeEmoji } from './notifications';
   import { formatDistanceToNow } from 'date-fns';
+  import { _ } from 'svelte-i18n';
 
   export let open = false;
 
@@ -28,13 +29,13 @@
   {#if open}
     <div class="notification-panel-content">
       <div class="panel-header">
-        <h3>Notifications</h3>
+        <h3>{$_('notifications.title')}</h3>
         <div class="header-actions">
           {#if unreadCount > 0}
-            <button class="text-btn" on:click={markAllAsRead}>Mark all read</button>
+            <button class="text-btn" on:click={markAllAsRead}>{$_('notifications.markAllRead')}</button>
           {/if}
           {#if $notifications.length > 0}
-            <button class="text-btn" on:click={clearAll}>Clear all</button>
+            <button class="text-btn" on:click={clearAll}>{$_('notifications.clearAll')}</button>
           {/if}
         </div>
       </div>
@@ -42,7 +43,7 @@
       <div class="notifications-list">
         {#if $notifications.length === 0}
           <div class="empty-state">
-            <p>No notifications yet</p>
+            <p>{$_('notifications.empty')}</p>
           </div>
         {:else}
           {#each $notifications as notif (notif.id)}

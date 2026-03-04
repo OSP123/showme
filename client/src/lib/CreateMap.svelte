@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { _ } from 'svelte-i18n';
   export let disabled = false;
   let name = '';
   let isPrivate = false;
@@ -17,36 +18,36 @@
   const templates: MapTemplate[] = [
     {
       id: 'custom',
-      name: 'Custom Map',
-      description: 'Create your own map from scratch',
+      name: 'createMap.template.custom.name',
+      description: 'createMap.template.custom.description',
       icon: '🗺️',
       defaultPrivate: false
     },
     {
       id: 'crisis',
-      name: 'Crisis Response',
-      description: 'Emergency response map for medical, water, and shelter locations',
+      name: 'createMap.template.crisis.name',
+      description: 'createMap.template.crisis.description',
       icon: '🚨',
       defaultPrivate: false
     },
     {
       id: 'community',
-      name: 'Community Map',
-      description: 'Share local resources and information with your community',
+      name: 'createMap.template.community.name',
+      description: 'createMap.template.community.description',
       icon: '👥',
       defaultPrivate: false
     },
     {
       id: 'event',
-      name: 'Event Map',
-      description: 'Map for events, checkpoints, and gathering points',
+      name: 'createMap.template.event.name',
+      description: 'createMap.template.event.description',
       icon: '🎪',
       defaultPrivate: false
     },
     {
       id: 'private',
-      name: 'Private Map',
-      description: 'Private map with access token protection',
+      name: 'createMap.template.private.name',
+      description: 'createMap.template.private.description',
       icon: '🔒',
       defaultPrivate: true
     }
@@ -55,7 +56,7 @@
   function selectTemplate(template: MapTemplate) {
     selectedTemplate = template.id;
     if (template.id !== 'custom') {
-      name = template.name;
+      name = $_(template.name);
       isPrivate = template.defaultPrivate;
     } else {
       name = '';
@@ -70,10 +71,10 @@
 </script>
 
 <div class="controls">
-  <h2>Create a Map</h2>
-  
+  <h2>{$_('createMap.title')}</h2>
+
   <div class="templates">
-    <p class="templates-label">Choose a template:</p>
+    <p class="templates-label">{$_('createMap.chooseTemplate')}</p>
     <div class="template-grid">
       {#each templates as template}
         <button
@@ -85,8 +86,8 @@
         >
           <span class="template-icon">{template.icon}</span>
           <div class="template-info">
-            <span class="template-name">{template.name}</span>
-            <span class="template-desc">{template.description}</span>
+            <span class="template-name">{$_(template.name)}</span>
+            <span class="template-desc">{$_(template.description)}</span>
           </div>
         </button>
       {/each}
@@ -95,11 +96,11 @@
 
   <div class="map-details">
     <div class="input-group">
-      <label for="map-name">Map Name</label>
+      <label for="map-name">{$_('createMap.mapName')}</label>
   <input
         id="map-name"
     type="text"
-        placeholder="Enter map name"
+        placeholder={$_('createMap.enterName')}
     bind:value={name}
     disabled={disabled}
   />
@@ -111,7 +112,7 @@
       bind:checked={isPrivate}
       disabled={disabled}
     />
-      <span>Make this map private (requires access token)</span>
+      <span>{$_('createMap.makePrivate')}</span>
   </label>
   </div>
 
@@ -120,7 +121,7 @@
     on:click={submit} 
     disabled={!name || disabled}
   >
-    {#if disabled}Creating…{:else}Create Map{/if}
+    {#if disabled}{$_('createMap.creating')}{:else}{$_('createMap.createButton')}{/if}
   </button>
 </div>
 
@@ -293,7 +294,7 @@
     .template-card {
       padding: 16px;
       flex-direction: row;
-      text-align: left;
+      text-align: start;
       align-items: flex-start;
       gap: 16px;
     }

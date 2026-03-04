@@ -6,6 +6,9 @@
   import { initLocalDb } from '$lib/db/pglite';
   import { getPins } from '$lib/api';
   import { getPinColor, getPinEmoji, getTimeAgo } from '$lib/pinUtils';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
+  import { getPinTypeLabel } from '$lib/i18n/pinTypes';
   import Supercluster from 'supercluster';
   import { getThumbnailUrl } from '$lib/imageCache';
 
@@ -205,50 +208,42 @@
   }
 
   function createPinMarker(pin: PinRow): Marker {
+      const t = get(_);
       // Convert string coordinates to numbers (fix for ElectricSQL sync)
       const lat = typeof pin.lat === 'string' ? parseFloat(pin.lat) : pin.lat;
       const lng = typeof pin.lng === 'string' ? parseFloat(pin.lng) : pin.lng;
-      
+
       const emoji = getPinEmoji(pin);
-      
+
       // Create marker element with emoji
       const el = document.createElement('div');
       el.className = 'custom-marker';
       el.innerHTML = `<span style="font-size: 24px;">${emoji}</span>`;
       el.style.cursor = 'pointer';
-      
+
       const marker = new Marker({ element: el })
         .setLngLat([lng, lat])
         .addTo(map);
-      
+
       // Add popup with pin details (always show popup, even if minimal info)
       let popupContent = `<div class="pin-popup">`;
-      
+
       // Pin type/emoji header
       popupContent += `<div class="pin-header">`;
       popupContent += `<span class="pin-emoji-large">${emoji}</span>`;
       // Tags are now arrays (TEXT[]), not JSON strings
       const tags = Array.isArray(pin.tags) ? pin.tags : [];
       if (tags.length > 0) {
-        const typeLabels: Record<string, string> = {
-          medical: 'Medical',
-          water: 'Water',
-          checkpoint: 'Checkpoint',
-          shelter: 'Shelter',
-          food: 'Food',
-          danger: 'Danger',
-          other: 'Location'
-        };
-        const typeLabel = typeLabels[tags[0]] || tags[0];
+        const typeLabel = getPinTypeLabel(tags[0], t);
         popupContent += `<span class="pin-type-label">${typeLabel}</span>`;
       }
       popupContent += `</div>`;
-      
+
       // Description
       if (pin.description) {
         popupContent += `<div class="pin-description">${pin.description}</div>`;
       }
-      
+
       // Tags
       // Tags are now arrays (TEXT[]), not JSON strings
       const tagsForDisplay = Array.isArray(pin.tags) ? pin.tags : [];
@@ -263,40 +258,40 @@
           popupContent += `</div>`;
         }
       }
-      
+
       // Photos
       const photoUrls = Array.isArray(pin.photo_urls) ? pin.photo_urls : [];
       if (photoUrls.length > 0) {
         popupContent += `<div class=\"pin-photos\">`;
         photoUrls.slice(0, 3).forEach((url: string, index: number) => {
           const thumbUrl = getThumbnailUrl(url, 150);
-          popupContent += `<img src="${thumbUrl}" alt="Photo ${index + 1}" class="pin-photo-thumb" onclick="window.open('${url}', '_blank')" />`;
+          popupContent += `<img src="${thumbUrl}" alt="${t('photoGallery.photoAlt', { values: { index: index + 1 } })}" class="pin-photo-thumb" onclick="window.open('${url}', '_blank')" />`;
         });
         if (photoUrls.length > 3) {
-          popupContent += `<div class="more-photos">+${photoUrls.length - 3} more</div>`;
+          popupContent += `<div class="more-photos">${t('photoGallery.morePhotos', { values: { count: photoUrls.length - 3 } })}</div>`;
         }
         popupContent += `</div>`;
       }
-      
+
       // Edit button
       popupContent += `<div class="pin-actions">`;
-      popupContent += `<button class="edit-pin-btn" onclick="window.editPin(${JSON.stringify(pin).replace(/"/g, '&quot;')})">✏️ Edit</button>`;
+      popupContent += `<button class="edit-pin-btn" onclick="window.editPin(${JSON.stringify(pin).replace(/"/g, '&quot;')})">✏️ ${t('pinLayer.edit')}</button>`;
       popupContent += `</div>`;
-      
+
       // Timestamp
       if (pin.created_at) {
         const date = new Date(pin.created_at);
-        const timeAgo = getTimeAgo(date);
+        const timeAgo = getTimeAgo(date, t);
         popupContent += `<div class="pin-time">${timeAgo}</div>`;
       }
-      
+
       popupContent += `</div>`;
-      
+
       const popup = new Popup({ offset: 25, closeButton: true, maxWidth: '250px' })
         .setHTML(popupContent);
-      
+
       marker.setPopup(popup);
-      
+
       // Handle marker clicks - open popup and prevent map click
       el.addEventListener('click', (e) => {
         e.stopPropagation(); // Prevent event from reaching map
@@ -305,7 +300,7 @@
           marker.togglePopup();
         }
       });
-      
+
       return marker;
   }
 
