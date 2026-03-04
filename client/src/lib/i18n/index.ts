@@ -1,4 +1,4 @@
-import { register, init, getLocaleFromNavigator, locale } from 'svelte-i18n';
+import { addMessages, init, getLocaleFromNavigator, locale } from 'svelte-i18n';
 
 // Static imports for offline-first (all translations bundled at build time)
 import en from './locales/en.json';
@@ -12,17 +12,17 @@ import ti from './locales/ti.json';
 import my from './locales/my.json';
 import fr from './locales/fr.json';
 
-// Register all locales synchronously (bundled, no network needed)
-register('en', () => Promise.resolve(en));
-register('ar', () => Promise.resolve(ar));
-register('fa', () => Promise.resolve(fa));
-register('ur', () => Promise.resolve(ur));
-register('uk', () => Promise.resolve(uk));
-register('ckb', () => Promise.resolve(ckb));
-register('ps', () => Promise.resolve(ps));
-register('ti', () => Promise.resolve(ti));
-register('my', () => Promise.resolve(my));
-register('fr', () => Promise.resolve(fr));
+// Add all locales synchronously (no async loading, immediate availability)
+addMessages('en', en);
+addMessages('ar', ar);
+addMessages('fa', fa);
+addMessages('ur', ur);
+addMessages('uk', uk);
+addMessages('ckb', ckb);
+addMessages('ps', ps);
+addMessages('ti', ti);
+addMessages('my', my);
+addMessages('fr', fr);
 
 export const SUPPORTED_LOCALES = [
   { code: 'en', name: 'English', dir: 'ltr' as const },

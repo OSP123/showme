@@ -5,12 +5,12 @@ import { afterEach, vi } from 'vitest';
 // @ts-ignore
 import { cleanup } from '@testing-library/svelte';
 // @ts-ignore
-import { register, init, waitLocale } from 'svelte-i18n';
+import { addMessages, init } from 'svelte-i18n';
 // @ts-ignore
 import en from '$lib/i18n/locales/en.json';
 
-// Initialize svelte-i18n for tests with English locale
-register('en', () => Promise.resolve(en));
+// Initialize svelte-i18n for tests with English locale (synchronous)
+addMessages('en', en);
 init({ fallbackLocale: 'en', initialLocale: 'en' });
 
 // Cleanup after each test
