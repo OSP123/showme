@@ -26,9 +26,19 @@ jobs:
 
       - name: Run client tests
         run: cd client && pnpm test
+        env:
+          VITE_ELECTRIC_SHAPE_URL: http://localhost:3013
+          VITE_ELECTRIC_SOURCE_ID: dev-source-001
+          VITE_CLOUDINARY_CLOUD_NAME: test
+          VITE_CLOUDINARY_UPLOAD_PRESET: test
 
       - name: Build client
         run: cd client && pnpm run build
+        env:
+          VITE_ELECTRIC_SHAPE_URL: http://localhost:3013
+          VITE_ELECTRIC_SOURCE_ID: dev-source-001
+          VITE_CLOUDINARY_CLOUD_NAME: test
+          VITE_CLOUDINARY_UPLOAD_PRESET: test
 
       - name: Install API dependencies
         run: cd api && npm ci
