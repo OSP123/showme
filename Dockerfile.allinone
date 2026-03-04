@@ -18,7 +18,7 @@ RUN pnpm install --frozen-lockfile
 COPY client/ ./
 
 # Set production environment variables for Vite build
-ENV VITE_ELECTRIC_SHAPE_URL=https://showme.fly.dev/v1/shape \
+ENV VITE_ELECTRIC_SHAPE_URL=/v1/shape \
     VITE_ELECTRIC_SOURCE_ID=prod-source-001 \
     VITE_CLOUDINARY_CLOUD_NAME=dmwttd5c7 \
     VITE_CLOUDINARY_UPLOAD_PRESET=showme-photos
