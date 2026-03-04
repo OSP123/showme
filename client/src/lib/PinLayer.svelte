@@ -78,9 +78,20 @@
     return (window as any).__panicWipeActive || localStorage.getItem('__panicWipeActive') === 'true';
   }
 
-  async function drawPins() {
+  function hasOpenPopup(): boolean {
+    return markers.some(m => {
+      const popup = m.getPopup();
+      return popup && popup.isOpen();
+    });
+  }
+
+  async function drawPins(force = false) {
     if (!map) return;
-    
+
+    // Don't redraw while a popup is open (user is reading it)
+    // unless force is true (e.g. new pin created, filter changed, db sync)
+    if (!force && hasOpenPopup()) return;
+
     // NOTE: We DO draw pins even if panic wipe is active
     // The flag only prevents fetching from PostgREST, not displaying local pins
     // This allows newly created pins to be displayed
@@ -333,7 +344,7 @@
         const { table, data } = event.detail;
         if (table === 'pins') {
           console.log('📡 Pins table changed, redrawing...');
-          await drawPins();
+          await drawPins(true);
         }
       };
       
@@ -379,8 +390,8 @@
 
   // Reactive: redraw pins when filter changes
   // NOTE: We redraw even if panic wipe is active - flag only prevents PostgREST polling
-  $: if (map && mapId) {
-    drawPins();
+  $: if (map && mapId && filterTypes) {
+    drawPins(true);
   }
 
   onDestroy(() => {
