@@ -41,7 +41,7 @@ describe('CreateMap Component', () => {
     });
   });
 
-  it('should dispatch create event with isPrivate=true when checkbox is checked', async () => {
+  it('should dispatch create event with isPrivate=true when private checkbox is checked', async () => {
     const createHandler = vi.fn();
     const { component } = render(CreateMap);
     component.$on('create', createHandler);
@@ -49,8 +49,9 @@ describe('CreateMap Component', () => {
     const input = screen.getByPlaceholderText('Enter map name');
     await fireEvent.input(input, { target: { value: 'Private Map' } });
 
-    const checkbox = screen.getByRole('checkbox');
-    await fireEvent.click(checkbox);
+    // First checkbox is "make private", second is "enable encryption"
+    const checkboxes = screen.getAllByRole('checkbox');
+    await fireEvent.click(checkboxes[0]); // private checkbox
 
     const createBtn = screen.getByText('Create Map');
     await fireEvent.click(createBtn);
@@ -63,14 +64,39 @@ describe('CreateMap Component', () => {
 
   it('should show private hint when private checkbox is checked', async () => {
     render(CreateMap);
-    // Hint should not be visible initially
     expect(screen.queryByText(/require an access code/i)).not.toBeInTheDocument();
 
-    const checkbox = screen.getByRole('checkbox');
-    await fireEvent.click(checkbox);
+    const checkboxes = screen.getAllByRole('checkbox');
+    await fireEvent.click(checkboxes[0]); // private checkbox
 
-    // Hint should appear
     expect(screen.getByText(/require an access code/i)).toBeInTheDocument();
+  });
+
+  it('should show encryption fields when encryption checkbox is checked', async () => {
+    render(CreateMap);
+    expect(screen.queryByText(/Enter passphrase/i)).not.toBeInTheDocument();
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    await fireEvent.click(checkboxes[1]); // encryption checkbox
+
+    expect(screen.getByPlaceholderText(/enter passphrase/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/confirm passphrase/i)).toBeInTheDocument();
+  });
+
+  it('should disable create button when encryption enabled but passphrase too short', async () => {
+    render(CreateMap);
+    const nameInput = screen.getByPlaceholderText('Enter map name');
+    await fireEvent.input(nameInput, { target: { value: 'My Map' } });
+
+    const checkboxes = screen.getAllByRole('checkbox');
+    await fireEvent.click(checkboxes[1]); // encryption checkbox
+
+    // Enter short passphrase
+    const passInput = screen.getByPlaceholderText(/enter passphrase/i);
+    await fireEvent.input(passInput, { target: { value: 'short' } });
+
+    const createBtn = screen.getByText('Create Map');
+    expect(createBtn).toBeDisabled();
   });
 
   it('should dispatch joinPrivate event when join button is clicked', async () => {
@@ -88,8 +114,8 @@ describe('CreateMap Component', () => {
     render(CreateMap, { props: { disabled: true } });
     const input = screen.getByPlaceholderText('Enter map name');
     expect(input).toBeDisabled();
-    const checkbox = screen.getByRole('checkbox');
-    expect(checkbox).toBeDisabled();
+    const checkboxes = screen.getAllByRole('checkbox');
+    checkboxes.forEach((cb) => expect(cb).toBeDisabled());
     const joinBtn = screen.getByText('Join a Private Map with Access Code');
     expect(joinBtn).toBeDisabled();
   });

@@ -58,7 +58,7 @@ app.get('/api/maps/code/:code', async (req, res) => {
   try {
     const { code } = req.params;
     const result = await pool.query(
-      'SELECT id, name, is_private FROM maps WHERE access_code = $1',
+      'SELECT id, name, is_private, encryption_salt FROM maps WHERE access_code = $1',
       [code.toUpperCase()]
     );
 
@@ -76,7 +76,7 @@ app.get('/api/maps/code/:code', async (req, res) => {
 // Create map
 app.post('/api/maps', async (req, res) => {
   try {
-    const { id, name, is_private = false, access_token = null, fuzzing_enabled = false, fuzzing_radius = 100, created_at } = req.body;
+    const { id, name, is_private = false, access_token = null, fuzzing_enabled = false, fuzzing_radius = 100, created_at, encryption_salt = null } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Map name is required' });
@@ -88,17 +88,18 @@ app.post('/api/maps', async (req, res) => {
     const accessCode = is_private ? generateAccessCode() : null;
 
     const result = await pool.query(
-      `INSERT INTO maps (id, name, is_private, access_token, access_code, fuzzing_enabled, fuzzing_radius, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO maps (id, name, is_private, access_token, access_code, encryption_salt, fuzzing_enabled, fuzzing_radius, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name,
          is_private = EXCLUDED.is_private,
          access_token = EXCLUDED.access_token,
          access_code = COALESCE(maps.access_code, EXCLUDED.access_code),
+         encryption_salt = COALESCE(EXCLUDED.encryption_salt, maps.encryption_salt),
          fuzzing_enabled = EXCLUDED.fuzzing_enabled,
          fuzzing_radius = EXCLUDED.fuzzing_radius
        RETURNING *`,
-      [mapId, name, is_private, access_token, accessCode, fuzzing_enabled, fuzzing_radius, timestamp]
+      [mapId, name, is_private, access_token, accessCode, encryption_salt, fuzzing_enabled, fuzzing_radius, timestamp]
     );
 
     console.log('Created map:', result.rows[0].id);
@@ -127,6 +128,51 @@ app.get('/api/maps/:id', async (req, res) => {
   } catch (error) {
     console.error('Error getting map:', error);
     res.status(500).json({ error: 'Failed to get map' });
+  }
+});
+
+// Update map (e.g. enable encryption)
+app.patch('/api/maps/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const token = req.query.token;
+
+    const access = await validateMapAccess(id, token);
+    if (!access.valid) {
+      return res.status(access.status).json({ error: access.reason });
+    }
+
+    const { encryption_salt, name } = req.body;
+    const setClauses = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (encryption_salt !== undefined) {
+      setClauses.push(`encryption_salt = $${paramIndex}`);
+      values.push(encryption_salt);
+      paramIndex++;
+    }
+
+    if (name !== undefined) {
+      setClauses.push(`name = $${paramIndex}`);
+      values.push(name);
+      paramIndex++;
+    }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    values.push(id);
+    const result = await pool.query(
+      `UPDATE maps SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values
+    );
+
+    res.json(sanitizeMap(result.rows[0]));
+  } catch (error) {
+    console.error('Error updating map:', error);
+    res.status(500).json({ error: 'Failed to update map' });
   }
 });
 
