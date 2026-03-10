@@ -154,5 +154,17 @@
   "accessCode.denied": "Access denied. You need a valid access code or token to view this private map.",
   "share.accessCode": "Access Code",
   "share.accessCodeHint": "Share this code verbally for quick access",
-  "share.copyCode": "Copy Code"
+  "share.copyCode": "Copy Code",
+  "offline.saveArea": "Save Area Offline",
+  "offline.cachedTiles": "Cached tiles",
+  "offline.zoomRange": "Zoom range",
+  "offline.estimatedTiles": "Estimated tiles",
+  "offline.tooManyTiles": "Too many tiles. Try a smaller area or narrower zoom range.",
+  "offline.download": "Download Tiles",
+  "offline.downloading": "Downloading tiles",
+  "offline.cancel": "Cancel",
+  "offline.complete": "Download complete!",
+  "offline.tilesCached": "Tiles cached",
+  "offline.tilesFailed": "Tiles failed",
+  "offline.downloadMore": "Download More"
 }

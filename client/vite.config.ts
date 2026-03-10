@@ -26,7 +26,7 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'map-tiles',
-              expiration: { maxEntries: 500, maxAgeSeconds: 7 * 24 * 60 * 60 },
+              expiration: { maxEntries: 2000, maxAgeSeconds: 7 * 24 * 60 * 60 },
               cacheableResponse: { statuses: [0, 200] }
             }
           },

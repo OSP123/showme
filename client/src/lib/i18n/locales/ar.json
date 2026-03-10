@@ -105,5 +105,17 @@
   "common.delete": "حذف",
   "confirm.title": "تأكيد",
   "confirm.deletePhoto": "حذف هذه الصورة؟",
-  "language.selector": "اللغة"
+  "language.selector": "اللغة",
+  "offline.saveArea": "حفظ المنطقة للعمل بدون اتصال",
+  "offline.cachedTiles": "المربعات المخزنة",
+  "offline.zoomRange": "نطاق التكبير",
+  "offline.estimatedTiles": "المربعات المقدرة",
+  "offline.tooManyTiles": "مربعات كثيرة جداً. جرب منطقة أصغر أو نطاق تكبير أضيق.",
+  "offline.download": "تحميل المربعات",
+  "offline.downloading": "جارٍ تحميل المربعات",
+  "offline.cancel": "إلغاء",
+  "offline.complete": "اكتمل التحميل!",
+  "offline.tilesCached": "المربعات المخزنة",
+  "offline.tilesFailed": "المربعات الفاشلة",
+  "offline.downloadMore": "تحميل المزيد"
 }

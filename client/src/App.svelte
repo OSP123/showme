@@ -22,6 +22,7 @@
   import ConfirmModal from '$lib/ConfirmModal.svelte';
   import AccessCodeModal from '$lib/AccessCodeModal.svelte';
   import { isMapEncrypted, unlockMap } from '$lib/db/keyManager';
+  import SaveAreaOffline from '$lib/SaveAreaOffline.svelte';
 
   // Synchronous initialization to prevent flash
   const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -54,7 +55,7 @@
   let selectedPinTypes: PinType[] = [];
   
   // Modal State Management
-  type ModalState = 'menu' | 'filter' | 'share' | 'notifications' | 'panic' | null;
+  type ModalState = 'menu' | 'filter' | 'share' | 'notifications' | 'panic' | 'offline' | null;
   let activeModal: ModalState = null;
 
   let editMode = false;
@@ -529,7 +530,7 @@
   }
 
   /* Buttons Common Styles */
-  .new-map-btn, .filter-toggle-btn, .panic-btn, .share-btn-menu, .notification-btn {
+  .new-map-btn, .filter-toggle-btn, .panic-btn, .share-btn-menu, .notification-btn, .offline-btn {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -547,7 +548,7 @@
     color: #333;
   }
 
-  .new-map-btn:hover, .filter-toggle-btn:hover, .panic-btn:hover, .share-btn-menu:hover, .notification-btn:hover {
+  .new-map-btn:hover, .filter-toggle-btn:hover, .panic-btn:hover, .share-btn-menu:hover, .notification-btn:hover, .offline-btn:hover {
     background: #f5f5f5;
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -806,7 +807,7 @@
     }
 
     /* Full width buttons in menu */
-    .new-map-btn, .filter-toggle-btn, .panic-btn, .share-btn-menu, .notification-btn {
+    .new-map-btn, .filter-toggle-btn, .panic-btn, .share-btn-menu, .notification-btn, .offline-btn {
       width: 100% !important;
       justify-content: flex-start;
       padding: 16px;
@@ -907,6 +908,13 @@
           {/if}
         </button>
 
+        <button
+          class="offline-btn"
+          on:click={() => toggleModal('offline')}
+        >
+          <span>📥</span> {$_('offline.saveArea')}
+        </button>
+
         <div class="language-selector">
           <label for="locale-select">🌐 {$_('language.selector')}</label>
           <select id="locale-select" bind:value={$locale}>
@@ -961,6 +969,16 @@
         </div>
       {/if}
       
+      {#if activeModal === 'offline'}
+        <div class="share-panel-modal">
+          <SaveAreaOffline
+            open={true}
+            map={mapInstance}
+            on:close={closeAllModals}
+          />
+        </div>
+      {/if}
+
       <!-- Shared Backdrop for any modal -->
       {#if activeModal && activeModal !== 'menu'}
         <div class="modal-backdrop" on:click={closeAllModals}></div>

@@ -21,17 +21,24 @@ Collaboratively pin locations on a map. Built for crisis response, community map
   - Water: no expiry
 
 ### Security & Privacy
-- **Encrypted Local Database**: AES-GCM encryption for sensitive data stored locally
-- **Field-Level Encryption**: Encrypts pin descriptions, tags, photo URLs, and map names
+- **Private Maps with Access Codes**: Share maps via 6-character codes or UUID tokens
 - **Location Fuzzing**: Optional coordinate obfuscation to protect exact locations (configurable per map)
 - **Panic Wipe**: Emergency data deletion that removes all local and remote data
+- **No User Accounts**: Anonymous, link-based access
+
+### Offline & PWA
+- **Progressive Web App**: Installable on mobile/desktop, works offline after first load
+- **Service Worker**: Precaches app shell, runtime caches map tiles (2000 tiles), Cloudinary images, and API responses
+- **Save Area Offline**: Download map tiles for a specific area and zoom range for offline use
+- **Operation Queue**: Failed API calls are queued and retried automatically when connection is restored
 
 ### User Experience
+- **Internationalization**: 10 languages with RTL support (Arabic, Farsi, Urdu, Kurdish, Pashto, and more)
 - **Map Templates**: Quick map creation with templates (Custom, Crisis Response, Community, Event, Private)
-- **Share Maps**: Generate shareable links with optional access tokens
+- **Share Maps**: Generate shareable links with access codes for verbal sharing
 - **Sync Status**: Real-time sync status indicator with operation queue visibility
 - **Pin Popups**: Rich pin details with timestamps, type labels, and descriptions
-- **New Map Button**: Easy navigation to create additional maps
+- **Photo Uploads**: Attach photos to pins via Cloudinary integration
 
 ## Getting Started
 
@@ -118,7 +125,7 @@ All managed by supervisord. Database data persists on the Fly volume.
 
 ### Technology Stack
 
-**Frontend:** Svelte 4, TypeScript, MapLibre GL JS, PGLite, ElectricSQL, Vite
+**Frontend:** Svelte 4, TypeScript, MapLibre GL JS, PGLite, ElectricSQL, Vite, svelte-i18n, Workbox (PWA)
 
 **Backend:** PostgreSQL + PostGIS, ElectricSQL, Express.js API, Nginx
 
@@ -130,7 +137,7 @@ All managed by supervisord. Database data persists on the Fly volume.
     - **Polling**: Express API polls every 4s for consistency
     - **Replication**: ElectricSQL streams changes in real-time (best-effort)
 3. **Offline Support**: Operation queue retries failed operations when connection is restored
-4. **Encryption**: Sensitive data is encrypted at rest in IndexedDB using Web Crypto API
+4. **PWA**: Service Worker caches app shell and map tiles for full offline use
 
 ### Data Flow
 
@@ -149,7 +156,8 @@ showme/
 ├── client/                  # Frontend Svelte app
 │   ├── src/
 │   │   ├── lib/             # Components, API, utilities
-│   │   │   ├── db/          # Database and encryption
+│   │   │   ├── db/          # PGlite database and sync
+│   │   │   ├── i18n/        # Internationalization (10 locales)
 │   │   │   ├── *.svelte     # UI components
 │   │   │   └── *.ts         # API, models, utils
 │   │   └── main.ts
@@ -180,13 +188,11 @@ npm test               # Run API endpoint tests
 
 ## Security & Privacy
 
-- **AES-GCM 256-bit encryption** for sensitive fields (descriptions, tags, photo URLs, map names)
+- **Private Maps**: Access controlled via 6-character codes or UUID tokens
 - **Location Fuzzing**: Obfuscate exact coordinates (configurable radius per map)
 - **Panic Wipe**: Emergency deletion of all local and remote data
 - **No User Accounts**: Anonymous, link-based access
-- **Private Maps**: Optional access tokens
-
-See [ENCRYPTION_TESTING.md](./ENCRYPTION_TESTING.md) for testing encryption.
+- **Access Validation**: All API endpoints enforce access token checks for private maps
 
 ## Development
 

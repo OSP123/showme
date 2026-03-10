@@ -388,3 +388,23 @@ Follow-ups:
 - Manual test: load app → go offline → reload → verify app loads from SW cache
 - Manual test: browse map tiles → go offline → verify cached tiles still render
 - Deploy to production
+
+---
+
+Date: 2026-03-10
+
+Tasks:
+- Enhanced offline map tile caching for zoom support
+  - Increased tile cache limit from 500 to 2000 entries in vite.config.ts
+  - Created `tileCache.ts` with tile coordinate calculation (Web Mercator), batch prefetching with concurrency control, abort support, and cache stats
+  - Created `SaveAreaOffline.svelte` component: modal with zoom range selector, tile count estimate, progress bar, download/cancel controls
+  - Integrated into App.svelte hamburger menu with "Save Area Offline" button
+  - Added i18n keys for offline feature across all 10 locale files (en + ar translated, 8 skeleton locales)
+  - 17 unit tests for tileCache (getTileCoords, estimateTileCount, prefetchTiles, getOfflineCacheStats)
+  - All 249 tests passing, build succeeds
+- Clarified offline data interaction: pin creation/editing already works offline via PGlite + operationQueue (saves locally first, queues for API sync)
+
+Follow-ups:
+- Rebuild Docker container to test PWA + offline tiles on localhost:3013
+- Manual test: navigate to area → "Save Area Offline" → download → go offline → zoom → tiles render
+- Deploy to production
