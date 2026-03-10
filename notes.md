@@ -369,3 +369,22 @@ Tasks:
 Follow-ups:
 - Deploy to production and run migration 23
 - Manual testing: create encrypted map, add pins, verify server stores encrypted blobs, unlock from another device
+
+---
+
+Date: 2026-03-10
+
+Tasks:
+- Added Service Worker / PWA for offline app loading (`feature/offline-pwa` branch)
+  - Installed `vite-plugin-pwa` with Workbox
+  - Configured precaching of all build assets (JS, CSS, HTML, WASM) including PGlite (20MB limit)
+  - Runtime caching: OSM map tiles (NetworkFirst, 500 tiles), Cloudinary images (CacheFirst, 200 entries), API calls (NetworkFirst, 60s)
+  - PWA manifest with icons for installability
+  - Added theme-color meta tag to index.html
+  - Build generates `sw.js` + `workbox-*.js` + `manifest.webmanifest` (16 precached entries, 28.7MB)
+  - 232 client tests still passing, build succeeds
+
+Follow-ups:
+- Manual test: load app → go offline → reload → verify app loads from SW cache
+- Manual test: browse map tiles → go offline → verify cached tiles still render
+- Deploy to production
