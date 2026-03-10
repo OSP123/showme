@@ -4,14 +4,23 @@
   export let disabled = false;
   let name = '';
   let isPrivate = false;
+  let passphrase = '';
+  let confirmPassphrase = '';
+  let enableEncryption = false;
   const dispatch = createEventDispatcher<{
-    create: { name: string; isPrivate: boolean };
+    create: { name: string; isPrivate: boolean; passphrase?: string };
     joinPrivate: void;
   }>();
 
+  $: passphraseValid = !enableEncryption || (passphrase.length >= 8 && passphrase === confirmPassphrase);
+
   function submit() {
-    if (!name) return;
-    dispatch('create', { name, isPrivate });
+    if (!name || !passphraseValid) return;
+    dispatch('create', {
+      name,
+      isPrivate,
+      passphrase: enableEncryption ? passphrase : undefined
+    });
   }
 </script>
 
@@ -41,12 +50,52 @@
     {#if isPrivate}
       <p class="private-hint">{$_('createMap.privateHint')}</p>
     {/if}
+
+    <label class="checkbox-label" style="margin-top: 12px;">
+      <input
+        type="checkbox"
+        bind:checked={enableEncryption}
+        disabled={disabled}
+      />
+      <span>{$_('createMap.enableEncryption')}</span>
+    </label>
+    {#if enableEncryption}
+      <div class="encryption-fields">
+        <p class="private-hint">{$_('createMap.encryptionHint')}</p>
+        <div class="input-group">
+          <label for="enc-pass">{$_('encryption.passphrase')}</label>
+          <input
+            id="enc-pass"
+            type="password"
+            bind:value={passphrase}
+            placeholder={$_('encryption.enterPassphrase')}
+            disabled={disabled}
+          />
+        </div>
+        <div class="input-group">
+          <label for="enc-confirm">{$_('encryption.confirmPassphrase')}</label>
+          <input
+            id="enc-confirm"
+            type="password"
+            bind:value={confirmPassphrase}
+            placeholder={$_('encryption.confirmPassphrasePlaceholder')}
+            disabled={disabled}
+          />
+        </div>
+        {#if passphrase && passphrase.length < 8}
+          <p class="error-hint">{$_('encryption.passphraseLength')}</p>
+        {/if}
+        {#if passphrase && confirmPassphrase && passphrase !== confirmPassphrase}
+          <p class="error-hint">{$_('encryption.passphraseMismatch')}</p>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <button
     class="create-btn"
     on:click={submit}
-    disabled={!name || disabled}
+    disabled={!name || disabled || !passphraseValid}
   >
     {#if disabled}{$_('createMap.creating')}{:else}{$_('createMap.createButton')}{/if}
   </button>
@@ -132,6 +181,25 @@
     margin: 8px 0 0 0;
     font-size: 12px;
     color: #888;
+    line-height: 1.4;
+  }
+
+  .encryption-fields {
+    margin-top: 12px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+  }
+
+  .encryption-fields .input-group {
+    margin-bottom: 10px;
+  }
+
+  .error-hint {
+    margin: 4px 0 0 0;
+    font-size: 12px;
+    color: #dc3545;
     line-height: 1.4;
   }
 

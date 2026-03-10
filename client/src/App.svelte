@@ -9,9 +9,10 @@
   import SyncStatus from '$lib/SyncStatus.svelte';
   import PinFilter from '$lib/PinFilter.svelte';
   import PanicWipe from '$lib/PanicWipe.svelte';
+  import EncryptionSetup from '$lib/EncryptionSetup.svelte';
   import NotificationBell from '$lib/NotificationBell.svelte';
   import { initLocalDb }    from '$lib/db/pglite';
-  import { createMap, addPin, updatePin, getPins, getMap, syncPinsFromApi, setAccessToken, getAccessToken } from '$lib/api';
+  import { createMap, addPin, updatePin, getPins, getMap, syncPinsFromApi, setAccessToken, getAccessToken, enableMapEncryption } from '$lib/api';
   import type { Map as GLMap }  from 'maplibre-gl';
   import type { PinData, MapRow, PinType, PinRow } from '$lib/models';
   import { notifications, getPinTypeEmoji } from '$lib/notifications';
@@ -20,6 +21,7 @@
   import { SUPPORTED_LOCALES } from '$lib/i18n';
   import ConfirmModal from '$lib/ConfirmModal.svelte';
   import AccessCodeModal from '$lib/AccessCodeModal.svelte';
+  import { isMapEncrypted, unlockMap } from '$lib/db/keyManager';
 
   // Synchronous initialization to prevent flash
   const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -62,6 +64,23 @@
   let showAlertModal = false;
   let alertMessage = '';
   let showAccessCodeModal = false;
+  let showPassphraseModal = false;
+  let passphraseInput = '';
+  let passphraseError = '';
+
+  async function handlePassphraseUnlock() {
+    if (!passphraseInput || !mapData?.encryption_salt) return;
+    passphraseError = '';
+    try {
+      await unlockMap(mapId, passphraseInput, mapData.encryption_salt);
+      showPassphraseModal = false;
+      passphraseInput = '';
+      // Reload map data with decryption
+      await loadMapData();
+    } catch {
+      passphraseError = 'Invalid passphrase. Please try again.';
+    }
+  }
 
   function closeAllModals() {
     activeModal = null;
@@ -146,6 +165,12 @@
       for (let i = 0; i < maxRetries; i++) {
         mapData = await getMap(db, mapId);
         if (mapData) {
+          // Check if map needs encryption unlock
+          if (mapData.encryption_salt && !isMapEncrypted(mapId)) {
+            isMapLoading = false;
+            showPassphraseModal = true;
+            return;
+          }
           isMapLoading = false;
           return; // Map found!
         }
@@ -254,11 +279,11 @@
     await loadMapData();
   }
 
-  async function handleCreate(event: CustomEvent<{ name: string; isPrivate: boolean }>) {
+  async function handleCreate(event: CustomEvent<{ name: string; isPrivate: boolean; passphrase?: string }>) {
     console.log('Creating map with:', event.detail);
     try {
-      const { name, isPrivate } = event.detail;
-      const result = await createMap(db, name, isPrivate);
+      const { name, isPrivate, passphrase } = event.detail;
+      const result = await createMap(db, name, isPrivate, passphrase);
       console.log('Map created:', result);
       mapId = result.id;
 
@@ -892,6 +917,17 @@
         </div>
       </div>
 
+      {#if activeModal === 'encryption'}
+        <div class="encryption-panel">
+          <button class="close-panel-btn" on:click={closeAllModals}>×</button>
+          <EncryptionSetup
+            mapId={mapId}
+            db={db}
+            encryptionSalt={mapData?.encryption_salt || null}
+          />
+        </div>
+      {/if}
+
       {#if activeModal === 'filter'}
         <div class="filter-panel">
           <button class="close-panel-btn" on:click={closeAllModals}>×</button>
@@ -912,6 +948,7 @@
             accessToken={mapData.access_token}
             accessCode={mapData.access_code}
             isPrivate={mapData.is_private === true || mapData.is_private === 'true'}
+            isEncrypted={!!mapData.encryption_salt}
             open={true}
           />
         </div>
@@ -1002,6 +1039,38 @@
     on:confirm={() => showAlertModal = false}
     on:cancel={() => showAlertModal = false}
   />
+
+  {#if showPassphraseModal}
+    <div class="modal-overlay" on:click={() => { showPassphraseModal = false; }}>
+      <div class="modal-content" on:click|stopPropagation>
+        <h3>{$_('encryption.unlockButton')}</h3>
+        <p style="font-size: 0.9rem; color: #666; margin-bottom: 1rem;">
+          {$_('encryption.needsPassphrase')}
+        </p>
+        <input
+          type="password"
+          bind:value={passphraseInput}
+          placeholder={$_('encryption.enterPassphrase')}
+          on:keydown={(e) => { if (e.key === 'Enter') handlePassphraseUnlock(); }}
+          style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; box-sizing: border-box; margin-bottom: 8px;"
+        />
+        {#if passphraseError}
+          <p style="color: #dc3545; font-size: 0.85rem; margin: 0 0 8px 0;">{passphraseError}</p>
+        {/if}
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button
+            class="btn-cancel"
+            on:click={() => { showPassphraseModal = false; }}
+          >{$_('common.cancel')}</button>
+          <button
+            class="btn-confirm"
+            on:click={handlePassphraseUnlock}
+            disabled={!passphraseInput}
+          >{$_('encryption.unlockButton')}</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   <AccessCodeModal
     open={showAccessCodeModal}

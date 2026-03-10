@@ -4,6 +4,7 @@
   export let accessToken: string | null = null;
   export let accessCode: string | null = null;
   export let isPrivate: boolean = false;
+  export let isEncrypted: boolean = false;
 
   export let open = false;
 
@@ -63,6 +64,12 @@
           </div>
           <p class="access-code-hint">{$_('share.accessCodeHint')}</p>
         </div>
+      {/if}
+
+      {#if isEncrypted}
+        <p class="encryption-note">
+          🔒 {$_('share.encryptionNote')}
+        </p>
       {/if}
 
       {#if isPrivate}
@@ -174,6 +181,15 @@
     font-size: 12px;
     color: #555;
     font-style: italic;
+  }
+
+  .encryption-note {
+    margin-top: 12px;
+    padding: 8px;
+    background: #e8f5e9;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #2e7d32;
   }
 
   .private-note {

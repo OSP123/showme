@@ -23,7 +23,7 @@ describe('API Functions', () => {
 
     // Create a mock database
     mockDb = {
-      query: vi.fn(),
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
       exec: vi.fn(),
       transaction: vi.fn(async (cb) => cb({ query: vi.fn() })),
     } as any;
@@ -332,7 +332,8 @@ describe('API Functions', () => {
 
       await updatePin(mockDb, 'test-pin-id', updates);
 
-      const queryCall = (mockDb.query as any).mock.calls[0];
+      // calls[0] is SELECT map_id, calls[1] is UPDATE
+      const queryCall = (mockDb.query as any).mock.calls[1];
       const query = queryCall[0];
 
       expect(query).toContain('UPDATE pins SET');
@@ -354,7 +355,8 @@ describe('API Functions', () => {
 
       await updatePin(mockDb, 'test-pin-id', updates);
 
-      const queryCall = (mockDb.query as any).mock.calls[0];
+      // calls[0] is SELECT map_id, calls[1] is UPDATE
+      const queryCall = (mockDb.query as any).mock.calls[1];
       const params = queryCall[1];
 
       // Find tags in params

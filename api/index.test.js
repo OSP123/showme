@@ -498,4 +498,84 @@ describe('Access Control - Private Maps', () => {
             expect(queryParams).toContain(null); // access_code param should be null
         });
     });
+
+    describe('Encryption Salt', () => {
+        it('should store encryption_salt when provided in POST /api/maps', async () => {
+            const mapData = {
+                id: 'enc-map-1',
+                name: '🔒encrypted-name',
+                is_private: true,
+                access_token: 'test-token',
+                encryption_salt: 'base64-salt-value=='
+            };
+
+            mockQuery.mockResolvedValueOnce({
+                rows: [{ ...mapData, access_code: 'ABC123' }]
+            });
+
+            const response = await request(app)
+                .post('/api/maps')
+                .send(mapData)
+                .expect(201);
+
+            // Verify encryption_salt was passed to the query
+            const queryParams = mockQuery.mock.calls[0][1];
+            expect(queryParams).toContain('base64-salt-value==');
+        });
+
+        it('should return encryption_salt in GET /api/maps/:id', async () => {
+            const mapRow = {
+                id: 'enc-map-1',
+                name: '🔒encrypted-name',
+                is_private: false,
+                access_token: null,
+                access_code: null,
+                encryption_salt: 'base64-salt=='
+            };
+
+            mockQuery.mockResolvedValueOnce({ rows: [mapRow] }); // validateMapAccess
+            mockQuery.mockResolvedValueOnce({ rows: [mapRow] }); // GET query
+
+            const response = await request(app)
+                .get('/api/maps/enc-map-1')
+                .expect(200);
+
+            expect(response.body[0].encryption_salt).toBe('base64-salt==');
+        });
+
+        it('should update encryption_salt via PATCH /api/maps/:id', async () => {
+            const mapRow = { id: 'map-1', is_private: false, access_token: null };
+
+            mockQuery.mockResolvedValueOnce({ rows: [mapRow] }); // validateMapAccess
+            mockQuery.mockResolvedValueOnce({
+                rows: [{ ...mapRow, encryption_salt: 'new-salt==' }]
+            }); // UPDATE
+
+            const response = await request(app)
+                .patch('/api/maps/map-1')
+                .send({ encryption_salt: 'new-salt==' })
+                .expect(200);
+
+            // Verify UPDATE query was called with salt
+            const updateCall = mockQuery.mock.calls[1];
+            expect(updateCall[1]).toContain('new-salt==');
+        });
+
+        it('should include encryption_salt in access code lookup', async () => {
+            const mapRow = {
+                id: 'enc-map',
+                name: '🔒encrypted',
+                is_private: true,
+                encryption_salt: 'lookup-salt=='
+            };
+
+            mockQuery.mockResolvedValueOnce({ rows: [mapRow] });
+
+            const response = await request(app)
+                .get('/api/maps/code/ABC123')
+                .expect(200);
+
+            expect(response.body.encryption_salt).toBe('lookup-salt==');
+        });
+    });
 });

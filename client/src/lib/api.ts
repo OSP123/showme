@@ -5,6 +5,8 @@ import { PIN_TTL_HOURS } from './models';
 import { initLocalDb } from './db/pglite';
 import { operationQueue } from './operationQueue';
 import { fuzzCoordinates } from './fuzzing';
+import { getMapEncryptionKey, initializeMapEncryption } from './db/keyManager';
+import { encryptPinRow, decryptPinRow, encryptMapRow, decryptMapRow, decryptPinRows, decryptMapRows } from './db/fieldEncryption';
 
 // API base URL - use nginx proxy in Docker, relative path in production
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -36,6 +38,46 @@ export async function lookupAccessCode(code: string): Promise<{ id: string; name
   } catch {
     return null;
   }
+}
+
+// Enable E2E encryption on an existing map
+export async function enableMapEncryption(
+  db: PGliteWithSync,
+  mapId: string,
+  passphrase: string
+): Promise<string> {
+  // Initialize per-map key and get salt
+  const saltBase64 = await initializeMapEncryption(mapId, passphrase);
+  const encryptionKey = await getMapEncryptionKey(mapId);
+
+  // Encrypt the map name
+  if (encryptionKey) {
+    const mapResult = await db.query('SELECT name FROM maps WHERE id = $1', [mapId]);
+    if (mapResult.rows.length > 0) {
+      const encrypted = await encryptMapRow({ name: mapResult.rows[0].name }, encryptionKey);
+      // Update locally
+      await db.query('UPDATE maps SET name = $1, encryption_salt = $2 WHERE id = $3', [
+        encrypted.name, saltBase64, mapId
+      ]);
+    }
+  }
+
+  // Save salt and encrypted name to server
+  try {
+    const mapResult = await db.query('SELECT name FROM maps WHERE id = $1', [mapId]);
+    await fetch(appendToken(`${API_URL}/api/maps/${mapId}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        encryption_salt: saltBase64,
+        name: mapResult.rows[0]?.name
+      })
+    });
+  } catch (error) {
+    console.warn('Failed to save encryption salt to server:', error);
+  }
+
+  return saltBase64;
 }
 
 // Check if a map exists in PostgreSQL
@@ -132,14 +174,27 @@ async function saveToPostgres(table: string, data: any) {
 export async function createMap(
   db: PGliteWithSync,
   name: string,
-  is_private = false
-): Promise<{ id: string; access_token: string | null; access_code: string | null }> {
+  is_private = false,
+  passphrase?: string
+): Promise<{ id: string; access_token: string | null; access_code: string | null; encryption_salt: string | null }> {
   const id = crypto.randomUUID();
   const access_token = is_private ? crypto.randomUUID() : null;
   const now = new Date().toISOString();
   let access_code: string | null = null;
+  let encryption_salt: string | null = null;
 
-  // NEW: Save to PostgreSQL via backend API for ElectricSQL sync
+  // E2E encryption: if passphrase provided, derive key and encrypt name
+  let serverName = name;
+  if (passphrase) {
+    encryption_salt = await initializeMapEncryption(id, passphrase);
+    const encryptionKey = await getMapEncryptionKey(id);
+    if (encryptionKey) {
+      const encrypted = await encryptMapRow({ name }, encryptionKey);
+      serverName = encrypted.name || name;
+    }
+  }
+
+  // Save to PostgreSQL via backend API for ElectricSQL sync
   try {
     console.log('🔄 Saving map to PostgreSQL via API for real-time sync...');
     const response = await fetch(appendToken(`${API_URL}/api/maps`), {
@@ -147,9 +202,10 @@ export async function createMap(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id,
-        name,
+        name: serverName,
         is_private,
         access_token,
+        encryption_salt,
         fuzzing_enabled: false,
         fuzzing_radius: 100,
         created_at: now
@@ -160,64 +216,41 @@ export async function createMap(
       throw new Error(`API error: ${response.statusText}`);
     }
 
-    // Capture access_code from API response (generated server-side)
     const mapData = await response.json();
     access_code = mapData.access_code || null;
 
     console.log('✅ Map saved to PostgreSQL - will sync via ElectricSQL');
 
-    // Clear panic wipe flag when user creates a new map
     if (typeof window !== 'undefined' && localStorage.getItem('__panicWipeActive') === 'true') {
       localStorage.removeItem('__panicWipeActive');
       (window as any).__panicWipeActive = false;
-      console.log('✅ Panic wipe flag cleared - user created new map, polling will resume');
     }
   } catch (error) {
     console.warn('⚠️ Failed to save map to PostgreSQL via API, queueing for retry:', error);
     await operationQueue.enqueue('createMap', {
       id,
-      name,
+      name: serverName,
       is_private,
       access_token,
+      encryption_salt,
       created_at: now
     });
   }
 
-  // RESTORED: Save to local database for Optimistic UI
-  // We use ON CONFLICT to ensure that if sync arrives later, we don't error.
+  // Save to local database for Optimistic UI (same encrypted values)
   await db.query(
-    `INSERT INTO maps (id,name,is_private,access_token,access_code,created_at)
-     VALUES ($1,$2,$3,$4,$5,$6)
+    `INSERT INTO maps (id,name,is_private,access_token,access_code,encryption_salt,created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
        is_private = EXCLUDED.is_private,
        access_token = EXCLUDED.access_token,
-       access_code = EXCLUDED.access_code`,
-    [
-      id,
-      name,
-      is_private,
-      access_token,
-      access_code,
-      now
-    ]
+       access_code = EXCLUDED.access_code,
+       encryption_salt = EXCLUDED.encryption_salt`,
+    [id, serverName, is_private, access_token, access_code, encryption_salt, now]
   );
 
-  // NOTE: We do NOT clear the panic wipe flag here
-  // The flag prevents fetching OLD pins from PostgREST, but allows NEW maps to be created locally
-
-  // EXISTING: Manually trigger sync for maps (preserved exactly)
-  try {
-    console.log('🔄 Triggering manual sync for maps after creation');
-    // Force ElectricSQL to check for changes
-    setTimeout(() => {
-      console.log('⚡ Maps sync trigger delayed');
-    }, 100);
-  } catch (error) {
-    console.error('❌ Failed to trigger maps sync:', error);
-  }
-
-  return { id, access_token, access_code };
+  return { id, access_token, access_code, encryption_salt };
 }
 
 export async function getPins(
@@ -239,7 +272,9 @@ export async function getPins(
     const params = includeExpired ? [mapId] : [mapId, now];
     const res = await db.query(query, params);
 
-    return res.rows;
+    // Decrypt pins with per-map encryption key
+    const encryptionKey = await getMapEncryptionKey(mapId);
+    return await decryptPinRows(res.rows, encryptionKey);
   } catch (error: any) {
     // If expires_at column doesn't exist, fall back to simple query
     const errorMsg = error?.message || String(error);
@@ -248,7 +283,9 @@ export async function getPins(
         `SELECT * FROM pins WHERE map_id = $1 ORDER BY created_at DESC`,
         [mapId]
       );
-      return res.rows;
+      // Decrypt pins with per-map encryption key
+      const encryptionKey = await getMapEncryptionKey(mapId);
+      return await decryptPinRows(res.rows, encryptionKey);
     }
     throw error;
   }
@@ -311,12 +348,24 @@ export async function addPin(
     console.warn('⚠️ Could not check fuzzing settings, using original coordinates:', error);
   }
 
-  // Save to local database first (offline-first)
-  const finalDescription = data.description || null;
-  const finalTags = tagsArray; // Native arrays for PGlite TEXT[]
-  const finalPhotoUrls = photoUrlsArray; // Native arrays for PGlite TEXT[]
+  // E2E encryption: encrypt sensitive fields before storing AND sending to server
+  const encryptionKey = await getMapEncryptionKey(data.map_id);
+  let finalDescription = data.description || null;
+  let finalTags: any = tagsArray;
+  let finalPhotoUrls: any = photoUrlsArray;
 
-  // RESTORED: Save to local database first (Optimistic UI)
+  if (encryptionKey) {
+    const encrypted = await encryptPinRow({
+      description: data.description || null,
+      tags: tagsArray,
+      photo_urls: photoUrlsArray
+    }, encryptionKey);
+    finalDescription = encrypted.description ?? finalDescription;
+    finalTags = encrypted.tags ?? tagsArray;
+    finalPhotoUrls = encrypted.photo_urls ?? photoUrlsArray;
+  }
+
+  // Save to local database (Optimistic UI) — same encrypted values
   try {
     const query = `
       INSERT INTO pins (id, map_id, lat, lng, type, tags, description, photo_urls, expires_at, created_at, updated_at)
@@ -332,23 +381,16 @@ export async function addPin(
     `;
 
     await db.query(query, [
-      id,
-      data.map_id,
-      finalLat,
-      finalLng,
-      data.type || null,
-      finalTags,
-      finalDescription,
-      finalPhotoUrls,
-      expiresAt,
-      now,
-      now
+      id, data.map_id, finalLat, finalLng,
+      data.type || null, finalTags, finalDescription, finalPhotoUrls,
+      expiresAt, now, now
     ]);
     console.log('✅ Pin saved locally (optimistic)');
   } catch (err) {
     console.error('⚠️ Local pin save failed:', err);
-    // Proceed to API save anyway
   }
+
+  // Send same encrypted values to server
   try {
     const response = await fetch(appendToken(`${API_URL}/api/pins`), {
       method: 'POST',
@@ -359,9 +401,9 @@ export async function addPin(
         lat: finalLat,
         lng: finalLng,
         type: data.type || null,
-        tags: tagsArray,
-        description: data.description || null,
-        photo_urls: data.photo_urls || [],
+        tags: finalTags,
+        description: finalDescription,
+        photo_urls: finalPhotoUrls,
         expires_at: expiresAt,
         created_at: now,
         updated_at: now
@@ -373,7 +415,6 @@ export async function addPin(
     }
 
     console.log('✅ Pin saved to PostgreSQL - will sync to other clients');
-    // Trigger immediate UI update
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('db-change', {
         detail: { table: 'pins', data: { id, map_id: data.map_id } }
@@ -382,16 +423,13 @@ export async function addPin(
   } catch (error) {
     console.warn('⚠️ Failed to save pin to PostgreSQL via API, queueing for retry:', error);
     await operationQueue.enqueue('addPin', {
-      id,
-      map_id: data.map_id,
-      lat: finalLat,
-      lng: finalLng,
+      id, map_id: data.map_id,
+      lat: finalLat, lng: finalLng,
       type: data.type || null,
-      tags: tagsArray,
-      description: data.description || null,
-      photo_urls: data.photo_urls || [],
-      created_at: now,
-      updated_at: now
+      tags: finalTags,
+      description: finalDescription,
+      photo_urls: finalPhotoUrls,
+      created_at: now, updated_at: now
     });
   }
 
@@ -417,9 +455,30 @@ export async function updatePin(
   // Process photo URLs
   const photoUrlsArray = updates.photo_urls || [];
 
-  const finalDescription = updates.description;
-  const finalTags = tagsArray;
-  const finalPhotoUrls = photoUrlsArray;
+  // E2E encryption: encrypt before storing locally AND sending to server
+  // Need mapId to get the per-map key — look up from first pin or the updates
+  let mapId: string | null = null;
+  try {
+    const pinResult = await db.query('SELECT map_id FROM pins WHERE id = $1', [pinId]);
+    if (pinResult.rows.length > 0) mapId = pinResult.rows[0].map_id;
+  } catch { /* proceed without encryption */ }
+
+  const encryptionKey = mapId ? await getMapEncryptionKey(mapId) : null;
+  let finalDescription: any = updates.description;
+  let finalTags: any = tagsArray;
+  let finalPhotoUrls: any = photoUrlsArray;
+
+  if (encryptionKey && (updates.description !== undefined || updates.tags || updates.photo_urls)) {
+    const encrypted = await encryptPinRow({
+      description: updates.description || null,
+      tags: tagsArray || null,
+      photo_urls: photoUrlsArray
+    }, encryptionKey);
+
+    finalDescription = encrypted.description ?? finalDescription;
+    finalTags = encrypted.tags ?? tagsArray;
+    finalPhotoUrls = encrypted.photo_urls ?? photoUrlsArray;
+  }
 
   // Build dynamic UPDATE query based on what's being updated
   const setClauses: string[] = ['updated_at = $1'];
@@ -459,11 +518,11 @@ export async function updatePin(
 
   console.log(`✅ Pin ${pinId} updated locally`);
 
-  // Sync update to API so other clients and polling don't overwrite
+  // Sync encrypted values to API so other clients get encrypted data
   const apiPayload: Record<string, any> = {};
-  if (updates.description !== undefined) apiPayload.description = updates.description || null;
-  if (updates.tags !== undefined) apiPayload.tags = tagsArray || [];
-  if (updates.photo_urls !== undefined) apiPayload.photo_urls = updates.photo_urls || [];
+  if (updates.description !== undefined) apiPayload.description = finalDescription;
+  if (updates.tags !== undefined) apiPayload.tags = finalTags || [];
+  if (updates.photo_urls !== undefined) apiPayload.photo_urls = finalPhotoUrls || [];
   if (updates.type) apiPayload.type = updates.type;
 
   if (Object.keys(apiPayload).length > 0) {
@@ -490,7 +549,7 @@ export async function updatePin(
 }
 
 /**
- * Get a map by ID
+ * Get a map by ID with decryption if enabled
  */
 export async function getMap(
   db: PGliteWithSync,
@@ -506,7 +565,10 @@ export async function getMap(
       return null;
     }
 
-    return result.rows[0] as MapRow;
+    // Decrypt map if per-map encryption key is available
+    const encryptionKey = await getMapEncryptionKey(mapId);
+    const decrypted = await decryptMapRow(result.rows[0] as MapRow, encryptionKey);
+    return decrypted;
   } catch (error) {
     console.error('Failed to get map:', error);
     return null;
@@ -514,10 +576,10 @@ export async function getMap(
 }
 
 /**
- * Get all maps
+ * Get all maps with decryption if enabled
  */
 /**
- * Get all maps
+ * Get all maps with decryption if enabled
  */
 export async function getAllMaps(
   db: PGliteWithSync
@@ -527,7 +589,15 @@ export async function getAllMaps(
       `SELECT * FROM maps ORDER BY created_at DESC`
     );
 
-    return result.rows as MapRow[];
+    // Decrypt each map with its own per-map key
+    const maps = result.rows as MapRow[];
+    const decrypted = await Promise.all(
+      maps.map(async (map) => {
+        const key = await getMapEncryptionKey(map.id);
+        return key ? decryptMapRow(map, key) : map;
+      })
+    );
+    return decrypted;
   } catch (error) {
     console.error('Failed to get maps:', error);
     return [];

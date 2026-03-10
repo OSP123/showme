@@ -63,6 +63,7 @@ export function initLocalDb(): Promise<PGlite> {
         is_private     BOOLEAN NOT NULL DEFAULT FALSE,
         access_token   TEXT,
         access_code    VARCHAR(6),
+        encryption_salt TEXT,
         fuzzing_enabled BOOLEAN NOT NULL DEFAULT FALSE,
         fuzzing_radius  INTEGER NOT NULL DEFAULT 100,
         created_at     TIMESTAMPTZ NOT NULL
@@ -77,6 +78,12 @@ export function initLocalDb(): Promise<PGlite> {
           WHERE table_name = 'maps' AND column_name = 'access_code'
         ) THEN
           ALTER TABLE maps ADD COLUMN access_code VARCHAR(6);
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'maps' AND column_name = 'encryption_salt'
+        ) THEN
+          ALTER TABLE maps ADD COLUMN encryption_salt TEXT;
         END IF;
       END $$;
     `);
