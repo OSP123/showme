@@ -5,8 +5,6 @@ import { PIN_TTL_HOURS } from './models';
 import { initLocalDb } from './db/pglite';
 import { operationQueue } from './operationQueue';
 import { fuzzCoordinates } from './fuzzing';
-import { getEncryptionKey } from './db/keyManager';
-import { encryptPinRow, decryptPinRow, encryptMapRow, decryptMapRow, decryptPinRows, decryptMapRows } from './db/fieldEncryption';
 
 // API base URL - use nginx proxy in Docker, relative path in production
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -185,18 +183,6 @@ export async function createMap(
     });
   }
 
-  // EXISTING: Save to local database (with encryption if enabled)
-  const encryptionKey = await getEncryptionKey();
-  let finalName = name;
-  let finalAccessToken = access_token;
-
-  if (encryptionKey) {
-    // Encrypt sensitive fields before storing
-    const encrypted = await encryptMapRow({ name, access_token }, encryptionKey);
-    finalName = encrypted.name || name;
-    finalAccessToken = encrypted.access_token || access_token;
-  }
-
   // RESTORED: Save to local database for Optimistic UI
   // We use ON CONFLICT to ensure that if sync arrives later, we don't error.
   await db.query(
@@ -209,9 +195,9 @@ export async function createMap(
        access_code = EXCLUDED.access_code`,
     [
       id,
-      finalName,
+      name,
       is_private,
-      finalAccessToken,
+      access_token,
       access_code,
       now
     ]
@@ -253,9 +239,7 @@ export async function getPins(
     const params = includeExpired ? [mapId] : [mapId, now];
     const res = await db.query(query, params);
 
-    // Decrypt pins if encryption is enabled
-    const encryptionKey = await getEncryptionKey();
-    return await decryptPinRows(res.rows, encryptionKey);
+    return res.rows;
   } catch (error: any) {
     // If expires_at column doesn't exist, fall back to simple query
     const errorMsg = error?.message || String(error);
@@ -264,9 +248,7 @@ export async function getPins(
         `SELECT * FROM pins WHERE map_id = $1 ORDER BY created_at DESC`,
         [mapId]
       );
-      // Decrypt pins if encryption is enabled
-      const encryptionKey = await getEncryptionKey();
-      return await decryptPinRows(res.rows, encryptionKey);
+      return res.rows;
     }
     throw error;
   }
@@ -329,25 +311,10 @@ export async function addPin(
     console.warn('⚠️ Could not check fuzzing settings, using original coordinates:', error);
   }
 
-  // Save to local database first (offline-first, with encryption if enabled)
-  const encryptionKey = await getEncryptionKey();
-  let finalDescription = data.description || null;
-  let finalTags = tagsArray; // Native arrays for PGlite TEXT[]
-  let finalPhotoUrls = photoUrlsArray; // Native arrays for PGlite TEXT[]
-
-  if (encryptionKey) {
-    // Encrypt sensitive fields before storing
-    // Encryption expects JSON strings, so convert temporarily
-    const encrypted = await encryptPinRow({
-      description: data.description || null,
-      tags: JSON.stringify(tagsArray),
-      photo_urls: JSON.stringify(photoUrlsArray)
-    }, encryptionKey);
-    finalDescription = encrypted.description || finalDescription;
-    // Parse back to arrays for PGlite
-    finalTags = encrypted.tags ? JSON.parse(encrypted.tags) : tagsArray;
-    finalPhotoUrls = encrypted.photo_urls ? JSON.parse(encrypted.photo_urls) : photoUrlsArray;
-  }
+  // Save to local database first (offline-first)
+  const finalDescription = data.description || null;
+  const finalTags = tagsArray; // Native arrays for PGlite TEXT[]
+  const finalPhotoUrls = photoUrlsArray; // Native arrays for PGlite TEXT[]
 
   // RESTORED: Save to local database first (Optimistic UI)
   try {
@@ -450,23 +417,9 @@ export async function updatePin(
   // Process photo URLs
   const photoUrlsArray = updates.photo_urls || [];
 
-  // Encrypt if needed
-  const encryptionKey = await getEncryptionKey();
-  let finalDescription = updates.description;
-  let finalTags = tagsArray;
-  let finalPhotoUrls = photoUrlsArray;
-
-  if (encryptionKey && (updates.description !== undefined || updates.tags || updates.photo_urls)) {
-    const encrypted = await encryptPinRow({
-      description: updates.description || null,
-      tags: tagsArray ? JSON.stringify(tagsArray) : null,
-      photo_urls: JSON.stringify(photoUrlsArray)
-    }, encryptionKey);
-
-    finalDescription = encrypted.description || finalDescription;
-    finalTags = encrypted.tags ? JSON.parse(encrypted.tags) : tagsArray;
-    finalPhotoUrls = encrypted.photo_urls ? JSON.parse(encrypted.photo_urls) : photoUrlsArray;
-  }
+  const finalDescription = updates.description;
+  const finalTags = tagsArray;
+  const finalPhotoUrls = photoUrlsArray;
 
   // Build dynamic UPDATE query based on what's being updated
   const setClauses: string[] = ['updated_at = $1'];
@@ -537,7 +490,7 @@ export async function updatePin(
 }
 
 /**
- * Get a map by ID with decryption if enabled
+ * Get a map by ID
  */
 export async function getMap(
   db: PGliteWithSync,
@@ -553,10 +506,7 @@ export async function getMap(
       return null;
     }
 
-    // Decrypt map if encryption is enabled
-    const encryptionKey = await getEncryptionKey();
-    const decrypted = await decryptMapRow(result.rows[0] as MapRow, encryptionKey);
-    return decrypted;
+    return result.rows[0] as MapRow;
   } catch (error) {
     console.error('Failed to get map:', error);
     return null;
@@ -564,10 +514,10 @@ export async function getMap(
 }
 
 /**
- * Get all maps with decryption if enabled
+ * Get all maps
  */
 /**
- * Get all maps with decryption if enabled
+ * Get all maps
  */
 export async function getAllMaps(
   db: PGliteWithSync
@@ -577,9 +527,7 @@ export async function getAllMaps(
       `SELECT * FROM maps ORDER BY created_at DESC`
     );
 
-    // Decrypt maps if encryption is enabled
-    const encryptionKey = await getEncryptionKey();
-    return await decryptMapRows(result.rows as MapRow[], encryptionKey);
+    return result.rows as MapRow[];
   } catch (error) {
     console.error('Failed to get maps:', error);
     return [];

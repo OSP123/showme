@@ -9,8 +9,6 @@
   import SyncStatus from '$lib/SyncStatus.svelte';
   import PinFilter from '$lib/PinFilter.svelte';
   import PanicWipe from '$lib/PanicWipe.svelte';
-  import EncryptionSetup from '$lib/EncryptionSetup.svelte';
-  import EncryptionTest from '$lib/EncryptionTest.svelte';
   import NotificationBell from '$lib/NotificationBell.svelte';
   import { initLocalDb }    from '$lib/db/pglite';
   import { createMap, addPin, updatePin, getPins, getMap, syncPinsFromApi, setAccessToken, getAccessToken } from '$lib/api';
@@ -54,7 +52,7 @@
   let selectedPinTypes: PinType[] = [];
   
   // Modal State Management
-  type ModalState = 'menu' | 'filter' | 'share' | 'encryption' | 'notifications' | 'panic' | null;
+  type ModalState = 'menu' | 'filter' | 'share' | 'notifications' | 'panic' | null;
   let activeModal: ModalState = null;
 
   let editMode = false;
@@ -113,15 +111,6 @@
 
   onMount(async () => {
     db = await initLocalDb();
-    
-    // Make testEncryption available globally for console testing
-    try {
-      const { testEncryption } = await import('$lib/testEncryption');
-      (window as any).testEncryption = testEncryption;
-      console.log('💡 Tip: Run testEncryption() in the console to test encryption');
-    } catch (error) {
-      // Ignore if module not found
-    }
     
     // Check if there's a mapId already set (from synchronous check)
     if (mapId) {
@@ -515,7 +504,7 @@
   }
 
   /* Buttons Common Styles */
-  .new-map-btn, .filter-toggle-btn, .panic-btn, .encryption-btn, .share-btn-menu, .notification-btn {
+  .new-map-btn, .filter-toggle-btn, .panic-btn, .share-btn-menu, .notification-btn {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -533,7 +522,7 @@
     color: #333;
   }
 
-  .new-map-btn:hover, .filter-toggle-btn:hover, .panic-btn:hover, .encryption-btn:hover, .share-btn-menu:hover, .notification-btn:hover {
+  .new-map-btn:hover, .filter-toggle-btn:hover, .panic-btn:hover, .share-btn-menu:hover, .notification-btn:hover {
     background: #f5f5f5;
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -603,7 +592,7 @@
     overflow-y: auto;
   }
 
-  .encryption-panel, .share-panel-modal, .notification-panel-modal {
+  .share-panel-modal, .notification-panel-modal {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -792,7 +781,7 @@
     }
 
     /* Full width buttons in menu */
-    .new-map-btn, .filter-toggle-btn, .panic-btn, .encryption-btn, .share-btn-menu, .notification-btn {
+    .new-map-btn, .filter-toggle-btn, .panic-btn, .share-btn-menu, .notification-btn {
       width: 100% !important;
       justify-content: flex-start;
       padding: 16px;
@@ -815,7 +804,7 @@
     }
 
     /* Panel Adjustments for Mobile */
-    .filter-panel, .encryption-panel, .share-panel-modal, .notification-panel-modal {
+    .filter-panel, .share-panel-modal, .notification-panel-modal {
       width: 90%;
       max-width: 350px; /* Keep strict max-width on mobile */
       padding-top: 40px; /* Space for close X */
@@ -827,10 +816,6 @@
       position: fixed;
     }
 
-    .encryption-btn {
-      padding: 10px;
-      font-size: 20px;
-    }
   }
 </style>
 
@@ -888,14 +873,6 @@
           🚨 {$_('app.menu.wipeData')}
         </button>
         <button
-          class="encryption-btn"
-          on:click={() => toggleModal('encryption')}
-          title={$_('app.menu.encryptionTitle')}
-        >
-          <span>🔒</span> {$_('app.menu.encryption')}
-        </button>
-
-        <button
           class="notification-btn"
           on:click={() => toggleModal('notifications')}
         >
@@ -914,14 +891,6 @@
           </select>
         </div>
       </div>
-
-      {#if activeModal === 'encryption'}
-        <div class="encryption-panel">
-          <button class="close-panel-btn" on:click={closeAllModals}>×</button>
-          <EncryptionSetup />
-          <EncryptionTest />
-        </div>
-      {/if}
 
       {#if activeModal === 'filter'}
         <div class="filter-panel">
