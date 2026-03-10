@@ -13,7 +13,7 @@
   import EncryptionTest from '$lib/EncryptionTest.svelte';
   import NotificationBell from '$lib/NotificationBell.svelte';
   import { initLocalDb }    from '$lib/db/pglite';
-  import { createMap, addPin, updatePin, getPins, getMap, syncPinsFromApi } from '$lib/api';
+  import { createMap, addPin, updatePin, getPins, getMap, syncPinsFromApi, setAccessToken, getAccessToken } from '$lib/api';
   import type { Map as GLMap }  from 'maplibre-gl';
   import type { PinData, MapRow, PinType, PinRow } from '$lib/models';
   import { notifications, getPinTypeEmoji } from '$lib/notifications';
@@ -21,10 +21,29 @@
   import { locale } from 'svelte-i18n';
   import { SUPPORTED_LOCALES } from '$lib/i18n';
   import ConfirmModal from '$lib/ConfirmModal.svelte';
+  import AccessCodeModal from '$lib/AccessCodeModal.svelte';
 
   // Synchronous initialization to prevent flash
   const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   let mapId = urlParams.get('map') || '';
+
+  // Read token from URL or localStorage
+  const urlToken = urlParams.get('token') || '';
+  if (urlToken && mapId) {
+    setAccessToken(urlToken);
+    // Persist token for returning users
+    localStorage.setItem(`showme_token_${mapId}`, urlToken);
+    // Clean token from URL for security
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('token');
+    window.history.replaceState({}, '', cleanUrl);
+  } else if (mapId) {
+    // Try localStorage fallback
+    const storedToken = localStorage.getItem(`showme_token_${mapId}`);
+    if (storedToken) {
+      setAccessToken(storedToken);
+    }
+  }
   
   let db: any;
   let mapInstance: GLMap | null = null;
@@ -44,6 +63,7 @@
   let showNotifications = false; // Kept for binding compatibility, controlled via activeModal
   let showAlertModal = false;
   let alertMessage = '';
+  let showAccessCodeModal = false;
 
   function closeAllModals() {
     activeModal = null;
@@ -113,14 +133,27 @@
 
   async function loadMapData() {
     if (!db || !mapId) return;
-    
+
     isMapLoading = true;
     try {
+      // Check API access first (catches 403 for private maps)
+      const API_URL = import.meta.env.VITE_API_URL || '';
+      const token = getAccessToken();
+      let apiUrl = `${API_URL}/api/maps/${mapId}`;
+      if (token) apiUrl += `?token=${encodeURIComponent(token)}`;
+
+      const apiResponse = await fetch(apiUrl);
+      if (apiResponse.status === 403) {
+        isMapLoading = false;
+        showAccessCodeModal = true;
+        return;
+      }
+
       // Poll for map availability (Server-First Sync Architecture)
       // We wait up to 10 seconds for the map to sync from the server
-      const maxRetries = 20; 
+      const maxRetries = 20;
       const retryDelay = 500; // ms
-      
+
       for (let i = 0; i < maxRetries; i++) {
         mapData = await getMap(db, mapId);
         if (mapData) {
@@ -130,7 +163,7 @@
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
-      
+
       // If map still doesn't exist after timeout, clear mapId and show CreateMap screen
       if (!mapData) {
         console.warn(`⚠️ Map ${mapId} does not exist after timeout, clearing from URL`);
@@ -215,6 +248,23 @@
     stopPolling();
   });
 
+  async function handleAccessCodeSubmit(event: CustomEvent<{ mapId: string; token: string }>) {
+    const { mapId: newMapId, token } = event.detail;
+    showAccessCodeModal = false;
+
+    // Set token and persist
+    setAccessToken(token);
+    localStorage.setItem(`showme_token_${newMapId}`, token);
+
+    // Navigate to the map
+    mapId = newMapId;
+    const url = new URL(window.location.href);
+    url.searchParams.set('map', newMapId);
+    window.history.replaceState({}, '', url);
+
+    await loadMapData();
+  }
+
   async function handleCreate(event: CustomEvent<{ name: string; isPrivate: boolean }>) {
     console.log('Creating map with:', event.detail);
     try {
@@ -222,12 +272,18 @@
       const result = await createMap(db, name, isPrivate);
       console.log('Map created:', result);
       mapId = result.id;
-      
+
+      // Set access token for private maps so the creator can access their own map
+      if (isPrivate && result.access_token) {
+        setAccessToken(result.access_token);
+        localStorage.setItem(`showme_token_${result.id}`, result.access_token);
+      }
+
       // Update URL to include the map ID
       const url = new URL(window.location.href);
       url.searchParams.set('map', result.id);
       window.history.pushState({}, '', url);
-      
+
       await loadMapData();
     } catch (error) {
       console.error('Failed to create map:', error);
@@ -781,7 +837,7 @@
 <main>
   {#if !mapId}
     <div class="create-map-container">
-      <CreateMap disabled={!db} on:create={handleCreate} />
+      <CreateMap disabled={!db} on:create={handleCreate} on:joinPrivate={() => { showAccessCodeModal = true; }} />
     </div>
   {:else}
     <div class="map-container">
@@ -885,7 +941,8 @@
           <ShareMap
             mapId={mapId}
             accessToken={mapData.access_token}
-            isPrivate={mapData.is_private === 'true'}
+            accessCode={mapData.access_code}
+            isPrivate={mapData.is_private === true || mapData.is_private === 'true'}
             open={true}
           />
         </div>
@@ -975,5 +1032,20 @@
     variant="warning"
     on:confirm={() => showAlertModal = false}
     on:cancel={() => showAlertModal = false}
+  />
+
+  <AccessCodeModal
+    open={showAccessCodeModal}
+    {mapId}
+    on:submit={handleAccessCodeSubmit}
+    on:cancel={() => {
+      showAccessCodeModal = false;
+      if (mapId) {
+        mapId = '';
+        const url = new URL(window.location.href);
+        url.searchParams.delete('map');
+        window.history.replaceState({}, '', url);
+      }
+    }}
   />
 </main>

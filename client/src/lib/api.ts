@@ -11,6 +11,35 @@ import { encryptPinRow, decryptPinRow, encryptMapRow, decryptMapRow, decryptPinR
 // API base URL - use nginx proxy in Docker, relative path in production
 const API_URL = import.meta.env.VITE_API_URL || '';
 
+// Access token for private map authentication
+let currentAccessToken: string | null = null;
+
+export function setAccessToken(token: string | null) {
+  currentAccessToken = token;
+}
+
+export function getAccessToken(): string | null {
+  return currentAccessToken;
+}
+
+// Append token query parameter to a URL
+function appendToken(url: string): string {
+  if (!currentAccessToken) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}token=${encodeURIComponent(currentAccessToken)}`;
+}
+
+// Look up a map by short access code
+export async function lookupAccessCode(code: string): Promise<{ id: string; name: string; is_private: boolean } | null> {
+  try {
+    const response = await fetch(`${API_URL}/api/maps/code/${encodeURIComponent(code)}`);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 // Check if a map exists in PostgreSQL
 async function ensureMapExistsInPostgres(db: PGliteWithSync, mapId: string): Promise<boolean> {
   try {
@@ -30,7 +59,7 @@ async function ensureMapExistsInPostgres(db: PGliteWithSync, mapId: string): Pro
 
     // Check if map exists in PostgreSQL
     // Use GET /api/maps/:id (returns array [map] or [])
-    const response = await fetch(`${API_URL}/api/maps/${mapId}`, {
+    const response = await fetch(appendToken(`${API_URL}/api/maps/${mapId}`), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -62,7 +91,7 @@ async function ensureMapExistsInPostgres(db: PGliteWithSync, mapId: string): Pro
 // Simple PostgreSQL HTTP client using Backend API
 async function saveToPostgres(table: string, data: any) {
   try {
-    const response = await fetch(`${API_URL}/api/${table}`, {
+    const response = await fetch(appendToken(`${API_URL}/api/${table}`), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -106,15 +135,16 @@ export async function createMap(
   db: PGliteWithSync,
   name: string,
   is_private = false
-): Promise<{ id: string; access_token: string | null }> {
+): Promise<{ id: string; access_token: string | null; access_code: string | null }> {
   const id = crypto.randomUUID();
   const access_token = is_private ? crypto.randomUUID() : null;
   const now = new Date().toISOString();
+  let access_code: string | null = null;
 
   // NEW: Save to PostgreSQL via backend API for ElectricSQL sync
   try {
     console.log('🔄 Saving map to PostgreSQL via API for real-time sync...');
-    const response = await fetch(`${API_URL}/api/maps`, {
+    const response = await fetch(appendToken(`${API_URL}/api/maps`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -131,6 +161,10 @@ export async function createMap(
     if (!response.ok) {
       throw new Error(`API error: ${response.statusText}`);
     }
+
+    // Capture access_code from API response (generated server-side)
+    const mapData = await response.json();
+    access_code = mapData.access_code || null;
 
     console.log('✅ Map saved to PostgreSQL - will sync via ElectricSQL');
 
@@ -166,17 +200,19 @@ export async function createMap(
   // RESTORED: Save to local database for Optimistic UI
   // We use ON CONFLICT to ensure that if sync arrives later, we don't error.
   await db.query(
-    `INSERT INTO maps (id,name,is_private,access_token,created_at)
-     VALUES ($1,$2,$3,$4,$5)
+    `INSERT INTO maps (id,name,is_private,access_token,access_code,created_at)
+     VALUES ($1,$2,$3,$4,$5,$6)
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
        is_private = EXCLUDED.is_private,
-       access_token = EXCLUDED.access_token`,
+       access_token = EXCLUDED.access_token,
+       access_code = EXCLUDED.access_code`,
     [
       id,
       finalName,
       is_private,
       finalAccessToken,
+      access_code,
       now
     ]
   );
@@ -195,7 +231,7 @@ export async function createMap(
     console.error('❌ Failed to trigger maps sync:', error);
   }
 
-  return { id, access_token };
+  return { id, access_token, access_code };
 }
 
 export async function getPins(
@@ -347,7 +383,7 @@ export async function addPin(
     // Proceed to API save anyway
   }
   try {
-    const response = await fetch(`${API_URL}/api/pins`, {
+    const response = await fetch(appendToken(`${API_URL}/api/pins`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -479,7 +515,7 @@ export async function updatePin(
 
   if (Object.keys(apiPayload).length > 0) {
     try {
-      const response = await fetch(`${API_URL}/api/pins/${pinId}`, {
+      const response = await fetch(appendToken(`${API_URL}/api/pins/${pinId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(apiPayload)
@@ -571,7 +607,7 @@ export async function syncPinsFromApi(
       url += `&after=${after}`;
     }
 
-    const response = await fetch(url);
+    const response = await fetch(appendToken(url));
     if (!response.ok) return [];
 
     const pins = await response.json();

@@ -72,6 +72,7 @@
   let currentMapId = '';
   let clusterIndex: Supercluster | null = null;
   let useClustering = true; // Enable clustering by default
+  let pendingRedraw = false; // Deferred redraw when popup is open during db-change
 
   // Helper function to check if panic wipe is active (checks both window flag and localStorage)
   function isPanicWipeActive(): boolean {
@@ -303,6 +304,14 @@
 
       marker.setPopup(popup);
 
+      // When popup closes, flush any pending redraws from db-change events
+      popup.on('close', () => {
+        if (pendingRedraw) {
+          pendingRedraw = false;
+          drawPins(true);
+        }
+      });
+
       // Handle marker clicks - open popup and prevent map click
       el.addEventListener('click', (e) => {
         e.stopPropagation(); // Prevent event from reaching map
@@ -340,9 +349,15 @@
           console.debug('⏸️ Database change ignored - panic wipe active');
           return;
         }
-        
-        const { table, data } = event.detail;
+
+        const { table } = event.detail;
         if (table === 'pins') {
+          // Don't force redraw if a popup is open — defer until popup closes
+          if (hasOpenPopup()) {
+            pendingRedraw = true;
+            console.debug('📡 Pins changed but popup is open — deferring redraw');
+            return;
+          }
           console.log('📡 Pins table changed, redrawing...');
           await drawPins(true);
         }
@@ -352,11 +367,11 @@
       
       // Redraw pins when map moves/zooms (for clustering)
       const onMoveEnd = () => {
-        // Always redraw - flag only prevents sync setup, not local display
+        // Skip redraw if popup is open — user is reading it
+        if (hasOpenPopup()) return;
         drawPins();
       };
       map.on('moveend', onMoveEnd);
-      map.on('zoomend', onMoveEnd);
       
       unsubscribe = () => {
         window.removeEventListener('db-change', dbChangeHandler as EventListener);

@@ -296,3 +296,28 @@ Follow-ups:
 - Translate skeleton locale files (fa, ur, uk, ckb, ps, ti, my, fr) with native speakers or translation service
 - Manual verification: switch to Arabic, verify RTL layout mirrors correctly
 - Manual verification: verify localStorage persistence across page reloads
+
+---
+
+Date: 2026-03-05
+
+Tasks:
+- Implemented private map access control (full stack)
+- API: Added `validateMapAccess()` enforcing access on all endpoints (GET/POST/PATCH/DELETE)
+- API: Added `generateAccessCode()` — 6-char codes from unambiguous charset (no O/0/I/1/L)
+- API: Added `GET /api/maps/code/:code` for short code lookup
+- API: Added `sanitizeMap()` to strip `access_token` from responses
+- Database: Migration `22_add_access_code.sql` — adds `access_code VARCHAR(6) UNIQUE` column
+- Client: `api.ts` — added `setAccessToken()`, `appendToken()`, `lookupAccessCode()`, all fetch calls auto-append token
+- Client: Created `AccessCodeModal.svelte` — modal for entering 6-char code or pasting UUID token
+- Client: `App.svelte` — reads `?token=` from URL, persists to localStorage, shows AccessCodeModal on 403
+- Client: `ShareMap.svelte` — shows access code prominently with copy button for verbal sharing
+- Client: Added `access_code` to `MapRow` type in `models.ts`
+- i18n: Added 11 keys for access code UI in `en.json`
+- Tests: 33 API tests pass (19 new access control tests), 195 client tests pass (7 new)
+- Build succeeds
+
+Follow-ups:
+- Deploy to production and test with actual private maps
+- Manual test: create private map → share URL → short code → invalid code rejected
+- Verify access_code column syncs via ElectricSQL to client PGlite

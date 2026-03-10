@@ -15,9 +15,62 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 
+// Access code charset (no ambiguous chars: O/0/I/1/L)
+const ACCESS_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function generateAccessCode() {
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += ACCESS_CODE_CHARS[Math.floor(Math.random() * ACCESS_CODE_CHARS.length)];
+  }
+  return code;
+}
+
+// Validate access to a map (returns { valid, map, status, reason })
+async function validateMapAccess(mapId, token) {
+  const result = await pool.query('SELECT * FROM maps WHERE id = $1', [mapId]);
+  if (result.rows.length === 0) {
+    return { valid: false, status: 404, reason: 'Map not found' };
+  }
+  const map = result.rows[0];
+  if (!map.is_private) {
+    return { valid: true, map };
+  }
+  if (!token || (token !== map.access_token && token !== map.access_code)) {
+    return { valid: false, status: 403, reason: 'Access denied. Invalid or missing access token.' };
+  }
+  return { valid: true, map };
+}
+
+// Strip sensitive fields from map response
+function sanitizeMap(map) {
+  const { access_token, ...rest } = map;
+  return rest;
+}
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'showme-api' });
+});
+
+// Look up map by short access code
+app.get('/api/maps/code/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const result = await pool.query(
+      'SELECT id, name, is_private FROM maps WHERE access_code = $1',
+      [code.toUpperCase()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No map found with that access code' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error looking up access code:', error);
+    res.status(500).json({ error: 'Failed to look up access code' });
+  }
 });
 
 // Create map
@@ -32,18 +85,20 @@ app.post('/api/maps', async (req, res) => {
     // Use client-provided ID or generate new one
     const mapId = id || uuidv4();
     const timestamp = created_at || new Date().toISOString();
+    const accessCode = is_private ? generateAccessCode() : null;
 
     const result = await pool.query(
-      `INSERT INTO maps (id, name, is_private, access_token, fuzzing_enabled, fuzzing_radius, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO maps (id, name, is_private, access_token, access_code, fuzzing_enabled, fuzzing_radius, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name,
          is_private = EXCLUDED.is_private,
          access_token = EXCLUDED.access_token,
+         access_code = COALESCE(maps.access_code, EXCLUDED.access_code),
          fuzzing_enabled = EXCLUDED.fuzzing_enabled,
          fuzzing_radius = EXCLUDED.fuzzing_radius
        RETURNING *`,
-      [mapId, name, is_private, access_token, fuzzing_enabled, fuzzing_radius, timestamp]
+      [mapId, name, is_private, access_token, accessCode, fuzzing_enabled, fuzzing_radius, timestamp]
     );
 
     console.log('Created map:', result.rows[0].id);
@@ -58,10 +113,17 @@ app.post('/api/maps', async (req, res) => {
 app.get('/api/maps/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const token = req.query.token;
+
+    const access = await validateMapAccess(id, token);
+    if (!access.valid) {
+      return res.status(access.status).json({ error: access.reason });
+    }
+
     const result = await pool.query('SELECT * FROM maps WHERE id = $1', [id]);
 
-    // Return array to match legacy PostgREST expectations
-    res.json(result.rows);
+    // Strip access_token from response
+    res.json(result.rows.map(sanitizeMap));
   } catch (error) {
     console.error('Error getting map:', error);
     res.status(500).json({ error: 'Failed to get map' });
@@ -75,6 +137,13 @@ app.post('/api/pins', async (req, res) => {
 
     if (!map_id || lat === undefined || lng === undefined) {
       return res.status(400).json({ error: 'map_id, lat, and lng are required' });
+    }
+
+    // Validate map access
+    const token = req.query.token;
+    const access = await validateMapAccess(map_id, token);
+    if (!access.valid) {
+      return res.status(access.status).json({ error: access.reason });
     }
 
     // Use client-provided ID or generate new one
@@ -110,10 +179,16 @@ app.post('/api/pins', async (req, res) => {
 // Get pins by map_id (Polling Fallback)
 app.get('/api/pins', async (req, res) => {
   try {
-    const { map_id, after } = req.query;
+    const { map_id, after, token } = req.query;
 
     if (!map_id) {
       return res.status(400).json({ error: 'map_id query parameter is required' });
+    }
+
+    // Validate map access
+    const access = await validateMapAccess(map_id, token);
+    if (!access.valid) {
+      return res.status(access.status).json({ error: access.reason });
     }
 
     let query = 'SELECT * FROM pins WHERE map_id = $1';
@@ -139,9 +214,22 @@ app.patch('/api/pins/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    const token = req.query.token;
 
     if (!updates || Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'No update fields provided' });
+    }
+
+    // Get pin to find its map_id
+    const pinResult = await pool.query('SELECT map_id FROM pins WHERE id = $1', [id]);
+    if (pinResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Pin not found' });
+    }
+
+    // Validate map access
+    const access = await validateMapAccess(pinResult.rows[0].map_id, token);
+    if (!access.valid) {
+      return res.status(access.status).json({ error: access.reason });
     }
 
     // Build dynamic SET clause from provided fields
@@ -186,6 +274,19 @@ app.patch('/api/pins/:id', async (req, res) => {
 app.delete('/api/pins/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const token = req.query.token;
+
+    // Get pin to find its map_id
+    const pinResult = await pool.query('SELECT map_id FROM pins WHERE id = $1', [id]);
+    if (pinResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Pin not found' });
+    }
+
+    // Validate map access
+    const access = await validateMapAccess(pinResult.rows[0].map_id, token);
+    if (!access.valid) {
+      return res.status(access.status).json({ error: access.reason });
+    }
 
     const result = await pool.query('DELETE FROM pins WHERE id = $1 RETURNING id', [id]);
 

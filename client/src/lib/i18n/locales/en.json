@@ -27,22 +27,14 @@
   "pinType.location": "Location",
 
   "createMap.title": "Create a Map",
-  "createMap.chooseTemplate": "Choose a template:",
   "createMap.mapName": "Map Name",
   "createMap.enterName": "Enter map name",
-  "createMap.makePrivate": "Make this map private (requires access token)",
+  "createMap.makePrivate": "Make this map private (requires access code)",
+  "createMap.privateHint": "Private maps require an access code or link to view. You'll get a shareable code after creating.",
   "createMap.creating": "Creating…",
   "createMap.createButton": "Create Map",
-  "createMap.template.custom.name": "Custom Map",
-  "createMap.template.custom.description": "Create your own map from scratch",
-  "createMap.template.crisis.name": "Crisis Response",
-  "createMap.template.crisis.description": "Emergency response map for medical, water, and shelter locations",
-  "createMap.template.community.name": "Community Map",
-  "createMap.template.community.description": "Share local resources and information with your community",
-  "createMap.template.event.name": "Event Map",
-  "createMap.template.event.description": "Map for events, checkpoints, and gathering points",
-  "createMap.template.private.name": "Private Map",
-  "createMap.template.private.description": "Private map with access token protection",
+  "createMap.or": "or",
+  "createMap.joinPrivate": "Join a Private Map with Access Code",
 
   "createPin.addPin": "Add Pin",
   "createPin.editPin": "Edit Pin",
@@ -161,5 +153,18 @@
   "confirm.deletePhoto": "Delete this photo?",
   "confirm.disableEncryption": "Warning: Disabling encryption will make encrypted data unreadable. Are you sure?",
 
-  "language.selector": "Language"
+  "language.selector": "Language",
+
+  "accessCode.title": "Enter Access Code",
+  "accessCode.description": "Enter the 6-character access code or paste the full access token to view this private map.",
+  "accessCode.placeholder": "e.g. A3X9K2",
+  "accessCode.submit": "Access Map",
+  "accessCode.checking": "Checking...",
+  "accessCode.invalidCode": "Invalid access code. Please check and try again.",
+  "accessCode.error": "Something went wrong. Please try again.",
+  "accessCode.denied": "Access denied. You need a valid access code or token to view this private map.",
+
+  "share.accessCode": "Access Code",
+  "share.accessCodeHint": "Share this code verbally for quick access",
+  "share.copyCode": "Copy Code"
 }

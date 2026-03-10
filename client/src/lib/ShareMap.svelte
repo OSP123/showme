@@ -2,6 +2,7 @@
   import { _ } from 'svelte-i18n';
   export let mapId: string;
   export let accessToken: string | null = null;
+  export let accessCode: string | null = null;
   export let isPrivate: boolean = false;
 
   export let open = false;
@@ -9,7 +10,6 @@
   function getShareUrl() {
     if (typeof window === 'undefined') return '';
     const url = new URL(window.location.href);
-    // App uses query params (App.svelte:23)
     url.searchParams.set('map', mapId);
     if (accessToken) {
       url.searchParams.set('token', accessToken);
@@ -26,7 +26,14 @@
     });
   }
 
-
+  let codeCopied = false;
+  function copyCode() {
+    if (!accessCode) return;
+    navigator.clipboard.writeText(accessCode).then(() => {
+      codeCopied = true;
+      setTimeout(() => codeCopied = false, 2000);
+    });
+  }
 </script>
 
 {#if open}
@@ -45,6 +52,19 @@
         </button>
       </div>
       
+      {#if isPrivate && accessCode}
+        <div class="access-code-section">
+          <label>{$_('share.accessCode')}</label>
+          <div class="access-code-display">
+            <span class="access-code">{accessCode}</span>
+            <button class="copy-btn" on:click={copyCode}>
+              {codeCopied ? `✓ ${$_('share.copied')}` : $_('share.copyCode')}
+            </button>
+          </div>
+          <p class="access-code-hint">{$_('share.accessCodeHint')}</p>
+        </div>
+      {/if}
+
       {#if isPrivate}
         <p class="private-note">
           ⚠️ {$_('share.privateNote')}
@@ -116,6 +136,44 @@
 
   .copy-btn:hover {
     background: #357abd;
+  }
+
+  .access-code-section {
+    margin-top: 16px;
+    padding: 12px;
+    background: #f0f7ff;
+    border-radius: 8px;
+    border: 1px solid #bdd7f5;
+  }
+
+  .access-code-section label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    color: #1a56db;
+  }
+
+  .access-code-display {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .access-code {
+    font-size: 28px;
+    font-family: monospace;
+    font-weight: 700;
+    letter-spacing: 6px;
+    color: #1a56db;
+    flex: 1;
+  }
+
+  .access-code-hint {
+    margin: 8px 0 0 0;
+    font-size: 12px;
+    color: #555;
+    font-style: italic;
   }
 
   .private-note {

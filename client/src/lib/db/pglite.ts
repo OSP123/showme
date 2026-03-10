@@ -62,10 +62,23 @@ export function initLocalDb(): Promise<PGlite> {
         name           TEXT NOT NULL,
         is_private     BOOLEAN NOT NULL DEFAULT FALSE,
         access_token   TEXT,
+        access_code    VARCHAR(6),
         fuzzing_enabled BOOLEAN NOT NULL DEFAULT FALSE,
         fuzzing_radius  INTEGER NOT NULL DEFAULT 100,
         created_at     TIMESTAMPTZ NOT NULL
       );
+    `);
+
+    // Add access_code column if missing (for existing PGlite databases)
+    await pdb.exec(`
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'maps' AND column_name = 'access_code'
+        ) THEN
+          ALTER TABLE maps ADD COLUMN access_code VARCHAR(6);
+        END IF;
+      END $$;
     `);
     await pdb.exec(`
       CREATE TABLE IF NOT EXISTS pins (

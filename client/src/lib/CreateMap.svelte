@@ -4,65 +4,10 @@
   export let disabled = false;
   let name = '';
   let isPrivate = false;
-  let selectedTemplate: string | null = null;
-  const dispatch = createEventDispatcher();
-
-  interface MapTemplate {
-    id: string;
-    name: string;
-    description: string;
-    icon: string;
-    defaultPrivate: boolean;
-  }
-
-  const templates: MapTemplate[] = [
-    {
-      id: 'custom',
-      name: 'createMap.template.custom.name',
-      description: 'createMap.template.custom.description',
-      icon: '🗺️',
-      defaultPrivate: false
-    },
-    {
-      id: 'crisis',
-      name: 'createMap.template.crisis.name',
-      description: 'createMap.template.crisis.description',
-      icon: '🚨',
-      defaultPrivate: false
-    },
-    {
-      id: 'community',
-      name: 'createMap.template.community.name',
-      description: 'createMap.template.community.description',
-      icon: '👥',
-      defaultPrivate: false
-    },
-    {
-      id: 'event',
-      name: 'createMap.template.event.name',
-      description: 'createMap.template.event.description',
-      icon: '🎪',
-      defaultPrivate: false
-    },
-    {
-      id: 'private',
-      name: 'createMap.template.private.name',
-      description: 'createMap.template.private.description',
-      icon: '🔒',
-      defaultPrivate: true
-    }
-  ];
-
-  function selectTemplate(template: MapTemplate) {
-    selectedTemplate = template.id;
-    if (template.id !== 'custom') {
-      name = $_(template.name);
-      isPrivate = template.defaultPrivate;
-    } else {
-      name = '';
-      isPrivate = false;
-    }
-  }
+  const dispatch = createEventDispatcher<{
+    create: { name: string; isPrivate: boolean };
+    joinPrivate: void;
+  }>();
 
   function submit() {
     if (!name) return;
@@ -73,55 +18,49 @@
 <div class="controls">
   <h2>{$_('createMap.title')}</h2>
 
-  <div class="templates">
-    <p class="templates-label">{$_('createMap.chooseTemplate')}</p>
-    <div class="template-grid">
-      {#each templates as template}
-        <button
-          type="button"
-          class="template-card"
-          class:selected={selectedTemplate === template.id}
-          on:click={() => selectTemplate(template)}
-          disabled={disabled}
-        >
-          <span class="template-icon">{template.icon}</span>
-          <div class="template-info">
-            <span class="template-name">{$_(template.name)}</span>
-            <span class="template-desc">{$_(template.description)}</span>
-          </div>
-        </button>
-      {/each}
-    </div>
-  </div>
-
   <div class="map-details">
     <div class="input-group">
       <label for="map-name">{$_('createMap.mapName')}</label>
-  <input
+      <input
         id="map-name"
-    type="text"
+        type="text"
         placeholder={$_('createMap.enterName')}
-    bind:value={name}
-    disabled={disabled}
-  />
+        bind:value={name}
+        disabled={disabled}
+      />
     </div>
-    
+
     <label class="checkbox-label">
-    <input
-      type="checkbox"
-      bind:checked={isPrivate}
-      disabled={disabled}
-    />
+      <input
+        type="checkbox"
+        bind:checked={isPrivate}
+        disabled={disabled}
+      />
       <span>{$_('createMap.makePrivate')}</span>
-  </label>
+    </label>
+    {#if isPrivate}
+      <p class="private-hint">{$_('createMap.privateHint')}</p>
+    {/if}
   </div>
 
-  <button 
-    class="create-btn" 
-    on:click={submit} 
+  <button
+    class="create-btn"
+    on:click={submit}
     disabled={!name || disabled}
   >
     {#if disabled}{$_('createMap.creating')}{:else}{$_('createMap.createButton')}{/if}
+  </button>
+
+  <div class="divider">
+    <span>{$_('createMap.or')}</span>
+  </div>
+
+  <button
+    class="join-btn"
+    on:click={() => dispatch('joinPrivate')}
+    disabled={disabled}
+  >
+    {$_('createMap.joinPrivate')}
   </button>
 </div>
 
@@ -139,69 +78,6 @@
     font-size: 24px;
     font-weight: 600;
     color: #333;
-  }
-
-  .templates {
-    margin-bottom: 24px;
-  }
-
-  .templates-label {
-    margin: 0 0 12px 0;
-    font-size: 14px;
-    font-weight: 500;
-    color: #666;
-  }
-
-  .template-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px;
-  }
-
-  .template-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 16px;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    background: white;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-align: center;
-  }
-
-  .template-card:hover:not(:disabled) {
-    border-color: #4a90e2;
-    background: #f0f7ff;
-  }
-
-  .template-card.selected {
-    border-color: #4a90e2;
-    background: #e3f2fd;
-  }
-
-  .template-card:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .template-icon {
-    font-size: 32px;
-    margin-bottom: 8px;
-  }
-
-  .template-name {
-    font-weight: 600;
-    font-size: 14px;
-    color: #333;
-    margin-bottom: 4px;
-  }
-
-  .template-desc {
-    font-size: 11px;
-    color: #666;
-    line-height: 1.3;
   }
 
   .map-details {
@@ -252,6 +128,13 @@
     cursor: pointer;
   }
 
+  .private-hint {
+    margin: 8px 0 0 0;
+    font-size: 12px;
+    color: #888;
+    line-height: 1.4;
+  }
+
   .create-btn {
     width: 100%;
     padding: 12px 24px;
@@ -274,6 +157,47 @@
     cursor: not-allowed;
   }
 
+  .divider {
+    display: flex;
+    align-items: center;
+    margin: 20px 0;
+    color: #999;
+    font-size: 13px;
+  }
+
+  .divider::before,
+  .divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #ddd;
+  }
+
+  .divider span {
+    padding: 0 12px;
+  }
+
+  .join-btn {
+    width: 100%;
+    padding: 12px 24px;
+    background: white;
+    color: #4a90e2;
+    border: 2px solid #4a90e2;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .join-btn:hover:not(:disabled) {
+    background: #f0f7ff;
+  }
+
+  .join-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
   /* Mobile optimizations */
   @media (max-width: 480px) {
     .controls {
@@ -284,37 +208,6 @@
 
     h2 {
       font-size: 24px;
-    }
-
-    .template-grid {
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }
-
-    .template-card {
-      padding: 16px;
-      flex-direction: row;
-      text-align: start;
-      align-items: flex-start;
-      gap: 16px;
-    }
-
-    .template-icon {
-      font-size: 28px;
-      margin-bottom: 0;
-    }
-
-    .template-info {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .template-name {
-      font-size: 16px;
-    }
-
-    .template-desc {
-      font-size: 13px;
     }
 
     .input-group input[type="text"] {

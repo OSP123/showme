@@ -6,6 +6,7 @@ export interface MapRow {
   name: string;
   is_private: 'true' | 'false';
   access_token: string | null;
+  access_code: string | null;
   created_at: string; // ISO timestamp
   fuzzing_enabled?: boolean;
   fuzzing_radius?: number; // in meters

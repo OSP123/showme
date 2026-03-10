@@ -16,7 +16,6 @@
   "app.notification.quickPinAdded": "Quick {type} pin added",
   "app.notification.pinUpdated": "Pin updated: {description}",
   "app.notification.changesSaved": "Changes saved",
-
   "pinType.medical": "Medical",
   "pinType.water": "Water",
   "pinType.checkpoint": "Checkpoint",
@@ -25,25 +24,12 @@
   "pinType.danger": "Danger",
   "pinType.other": "Other",
   "pinType.location": "Location",
-
   "createMap.title": "Create a Map",
-  "createMap.chooseTemplate": "Choose a template:",
   "createMap.mapName": "Map Name",
   "createMap.enterName": "Enter map name",
   "createMap.makePrivate": "Make this map private (requires access token)",
   "createMap.creating": "Creating…",
   "createMap.createButton": "Create Map",
-  "createMap.template.custom.name": "Custom Map",
-  "createMap.template.custom.description": "Create your own map from scratch",
-  "createMap.template.crisis.name": "Crisis Response",
-  "createMap.template.crisis.description": "Emergency response map for medical, water, and shelter locations",
-  "createMap.template.community.name": "Community Map",
-  "createMap.template.community.description": "Share local resources and information with your community",
-  "createMap.template.event.name": "Event Map",
-  "createMap.template.event.description": "Map for events, checkpoints, and gathering points",
-  "createMap.template.private.name": "Private Map",
-  "createMap.template.private.description": "Private map with access token protection",
-
   "createPin.addPin": "Add Pin",
   "createPin.editPin": "Edit Pin",
   "createPin.type": "Type",
@@ -55,24 +41,20 @@
   "createPin.photos": "Photos (optional)",
   "createPin.saveChanges": "Save Changes",
   "createPin.removePhoto": "Remove photo",
-
   "quickPin.title": "Quick Pin",
   "quickPin.subtitle": "Tap to add a pin",
   "quickPin.expiresIn": "Expires in {hours}h",
   "quickPin.noExpiry": "No expiry",
   "quickPin.advancedOptions": "Advanced Options",
   "quickPin.addPinLabel": "Add {label} pin",
-
   "filter.clear": "Clear",
   "filter.showingCount": "Showing: {count} {count, plural, one {type} other {types}}",
   "filter.showingAll": "Showing: All pins",
-
   "share.title": "Share Map",
   "share.mapLink": "Map Link",
   "share.copy": "Copy",
   "share.copied": "Copied!",
   "share.privateNote": "This is a private map. Share the link with the access token included.",
-
   "panic.title": "Emergency Data Wipe",
   "panic.warningIntro": "This will permanently delete ALL local data:",
   "panic.allMaps": "All maps",
@@ -86,7 +68,6 @@
   "panic.rateLimited": "Please wait a few seconds before performing another wipe.",
   "panic.dbUnavailable": "Database not available. Please refresh the page and try again.",
   "panic.wipeFailed": "Failed to wipe data: {error}. Please try again.",
-
   "encryption.label": "Encryption:",
   "encryption.keyTypeLabel": "Key Type:",
   "encryption.enabled": "Enabled",
@@ -115,7 +96,6 @@
   "encryption.failedChange": "Failed to change passphrase",
   "encryption.processing": "Processing...",
   "encryption.disableWarning": "Warning: Disabling encryption will make encrypted data unreadable. Are you sure?",
-
   "sync.synced": "Synced",
   "sync.syncing": "Syncing...",
   "sync.offline": "Offline",
@@ -125,41 +105,36 @@
   "sync.operations": "{count} {count, plural, one {operation} other {operations}}",
   "sync.autoSync": "Operations will sync automatically when connection is restored",
   "sync.allSynced": "All operations synced",
-
   "notifications.title": "Notifications",
   "notifications.markAllRead": "Mark all read",
   "notifications.clearAll": "Clear all",
   "notifications.empty": "No notifications yet",
-
   "upload.dropPhotos": "Drop photos here",
   "upload.clickOrDrag": "Click or drag photos",
   "upload.maxPhotos": "Max {max} photos, 5MB each",
   "upload.uploading": "Uploading {current} of {total} photos...",
   "upload.maxExceeded": "Maximum {max} photos allowed",
   "upload.failed": "Upload failed",
-
   "photoGallery.viewFullSize": "Click to view full size",
   "photoGallery.photoAlt": "Photo {index}",
   "photoGallery.delete": "Delete",
   "photoGallery.deleteConfirm": "Delete this photo?",
   "photoGallery.deleteConfirmTitle": "Delete Photo",
   "photoGallery.morePhotos": "+{count} more",
-
   "pinLayer.edit": "Edit",
-
   "time.justNow": "Just now",
   "time.minutesAgo": "{count}m ago",
   "time.hoursAgo": "{count}h ago",
   "time.daysAgo": "{count}d ago",
-
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.confirm": "Confirm",
   "common.delete": "Delete",
-
   "confirm.title": "Confirm",
   "confirm.deletePhoto": "Delete this photo?",
   "confirm.disableEncryption": "Warning: Disabling encryption will make encrypted data unreadable. Are you sure?",
-
-  "language.selector": "Language"
+  "language.selector": "Language",
+  "createMap.privateHint": "",
+  "createMap.or": "",
+  "createMap.joinPrivate": ""
 }
