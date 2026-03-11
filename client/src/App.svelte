@@ -101,7 +101,10 @@
   // Protomaps vector style with multilingual labels
   import { layers as pmLayers, namedFlavor } from '@protomaps/basemaps';
 
-  const PMTILES_URL = 'pmtiles://https://build.protomaps.com/20260311.pmtiles';
+  // Use local proxy in production to avoid CORS issues with build.protomaps.com
+  const PMTILES_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? `pmtiles://${window.location.origin}/pmtiles/20260311.pmtiles`
+    : 'pmtiles://https://build.protomaps.com/20260311.pmtiles';
 
   function buildMapStyle(lang: string) {
     return {

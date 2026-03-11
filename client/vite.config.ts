@@ -22,7 +22,7 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB for PGlite WASM
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/build\.protomaps\.com\/.*/,
+            urlPattern: /\/pmtiles\/.*|^https:\/\/build\.protomaps\.com\/.*/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'pmtiles',
