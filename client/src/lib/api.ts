@@ -309,17 +309,20 @@ export async function addPin(
   // Process photo URLs
   const photoUrlsArray = data.photo_urls || [];
 
-  // Calculate expiration time (TTL) based on pin type
+  // Calculate expiration time: user-chosen expires_at takes priority over type-based TTL
   let expiresAt: string | null = null;
 
-  const ttlHours = data.type ? PIN_TTL_HOURS[data.type] : undefined;
-
-  if (ttlHours !== undefined) {
-    const expirationDate = new Date();
-    expirationDate.setHours(expirationDate.getHours() + ttlHours);
-    expiresAt = expirationDate.toISOString();
-  } else if (data.expires_at) {
+  if (data.expires_at) {
+    // User explicitly chose an expiration time
     expiresAt = data.expires_at;
+  } else {
+    // Fall back to type-based TTL
+    const ttlHours = data.type ? PIN_TTL_HOURS[data.type] : undefined;
+    if (ttlHours !== undefined) {
+      const expirationDate = new Date();
+      expirationDate.setHours(expirationDate.getHours() + ttlHours);
+      expiresAt = expirationDate.toISOString();
+    }
   }
 
   // Apply fuzzing if map has it enabled

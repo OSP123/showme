@@ -3,6 +3,7 @@
   import { _ } from 'svelte-i18n';
   import type { PinType, PinData } from './models';
   import { PIN_TYPE_DEFINITIONS } from './i18n/pinTypes';
+  import { EXPIRATION_OPTIONS, computeExpiresAt } from './pinExpiration';
   import PhotoUpload from './PhotoUpload.svelte';
   import type { UploadResult } from './imageUpload';
   import { getThumbnailUrl } from './imageCache';
@@ -21,6 +22,7 @@
   }>();
 
   let selectedType: PinType = 'other';
+  let selectedExpiration = 'default';
   let description = '';
   let tags: string[] = [];
   let tagInput = '';
@@ -86,6 +88,7 @@
       });
     } else {
       // Create mode
+      const expiresAt = computeExpiresAt(selectedExpiration, selectedType);
       dispatch('create', {
         lat,
         lng,
@@ -93,11 +96,13 @@
         description: description.trim() || undefined,
         tags: tags.length > 0 ? tags : undefined,
         photo_urls: photoUrls.length > 0 ? photoUrls : undefined,
+        expires_at: expiresAt || undefined,
       });
     }
     
     // Reset form
     selectedType = 'other';
+    selectedExpiration = 'default';
     description = '';
     tags = [];
     tagInput = '';
@@ -109,6 +114,7 @@
     dispatch('cancel');
     // Reset form
     selectedType = 'other';
+    selectedExpiration = 'default';
     description = '';
     tags = [];
     tagInput = '';
@@ -137,6 +143,15 @@
             </button>
           {/each}
         </div>
+      </div>
+
+      <div class="form-group">
+        <label for="expiration">{$_('createPin.expiration')}</label>
+        <select id="expiration" bind:value={selectedExpiration} class="expiration-select">
+          {#each EXPIRATION_OPTIONS as opt}
+            <option value={opt.value}>{$_(opt.labelKey)}</option>
+          {/each}
+        </select>
       </div>
 
       <div class="form-group">
@@ -295,6 +310,16 @@
   .label {
     font-size: 12px;
     font-weight: 500;
+  }
+
+  .expiration-select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 14px;
+    background: white;
   }
 
   textarea {

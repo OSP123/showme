@@ -98,28 +98,53 @@
   }
   let showMobileMenu = false;
 
-  // OpenStreetMap raster style
-  const osmStyle = {
-    id: 'OSM Raster',
-    version: 8,
-    sources: {
-      osm: {
-        type: 'raster',
-        tiles: [
-          'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
-        ],
-        minzoom: 0,
-        maxzoom: 19,
-        attribution:
-          '© <a href="https://openstreetmap.org" target="_blank" rel="noopener">OSM contributors</a>'
+  // Protomaps vector style with multilingual labels
+  import { layers as pmLayers, namedFlavor } from '@protomaps/basemaps';
+
+  const PMTILES_URL = 'pmtiles://https://build.protomaps.com/20260311.pmtiles';
+
+  function buildMapStyle(lang: string) {
+    return {
+      version: 8 as const,
+      glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
+      sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v4/light',
+      sources: {
+        protomaps: {
+          type: 'vector' as const,
+          url: PMTILES_URL,
+          attribution:
+            '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org" target="_blank" rel="noopener">OSM contributors</a>'
+        }
+      },
+      layers: pmLayers('protomaps', namedFlavor('light'), { lang })
+    };
+  }
+
+  $: mapStyle = buildMapStyle($locale || 'en');
+
+  // Update map labels when locale changes (without full style reload)
+  $: if (mapInstance && $locale) {
+    updateMapLanguage(mapInstance, $locale);
+  }
+
+  function updateMapLanguage(map: GLMap, lang: string) {
+    if (!map.isStyleLoaded()) {
+      map.once('styledata', () => updateMapLanguage(map, lang));
+      return;
+    }
+    const style = map.getStyle();
+    if (style?.layers) {
+      for (const layer of style.layers) {
+        if (layer.type === 'symbol' && layer.layout?.['text-field']) {
+          map.setLayoutProperty(layer.id, 'text-field', [
+            'coalesce',
+            ['get', `name:${lang}`],
+            ['get', 'name']
+          ]);
+        }
       }
-    },
-    layers: [
-      { id: 'osm', type: 'raster', source: 'osm', layout: { visibility: 'visible' } }
-    ]
-  };
+    }
+  }
 
   // Debug logging
   $: {
@@ -985,7 +1010,7 @@
       {/if}
 
       <MapView
-        style={osmStyle}
+        style={mapStyle}
         center={[0, 0]}
         zoom={2}
         on:load={handleMapLoad}

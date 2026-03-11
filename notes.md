@@ -425,3 +425,30 @@ Tasks:
 
 Follow-ups:
 - Push changes and update PR
+
+---
+
+Date: 2026-03-11
+
+Tasks:
+- Replaced OSM raster tiles with Protomaps PMTiles vector tiles for multilingual map support
+  - Installed `pmtiles` and `@protomaps/basemaps` packages
+  - Registered PMTiles protocol in MapView.svelte (mount/unmount lifecycle)
+  - Replaced hardcoded OSM raster style in App.svelte with `buildMapStyle()` using Protomaps light theme
+  - Map labels now switch language reactively when user changes locale (via `setLayoutProperty` on symbol layers)
+  - Uses `coalesce` expression to fall back to default `name` if translation missing
+  - Updated service worker caching in vite.config.ts for PMTiles range requests and Protomaps font/sprite assets
+  - Built and verified in Docker container
+- Added user-configurable pin expiration
+  - Created `pinExpiration.ts` module with `EXPIRATION_OPTIONS` (default, 1h, 6h, 12h, 24h, 7d, never) and `computeExpiresAt()` function
+  - Added expiration dropdown to CreatePin.svelte (between type selector and description)
+  - User choice overrides type-based TTL; "default" preserves existing per-type behavior; "never" removes expiration
+  - Updated `addPin()` in api.ts to prioritize user-provided `expires_at` over type TTL
+  - Added i18n keys for expiration options across all 10 locale files (ar, fa, ur, ckb, ps translated; ti, my, uk, fr use English)
+  - 10 unit tests for pinExpiration module, all existing CreatePin tests still passing
+- All 281+ tests passing, build succeeds
+
+Follow-ups:
+- Manual test: create pin with "Never" expiration, verify it persists beyond type TTL
+- Manual test: switch language, verify map labels update
+- Consider self-hosting PMTiles file for production (currently using build.protomaps.com daily builds)

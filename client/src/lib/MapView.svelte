@@ -2,6 +2,7 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import maplibregl, { type Map as GLMap } from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
+  import { Protocol } from 'pmtiles';
   import { getUserLocation } from './geolocation';
 
   export let style: any;
@@ -12,14 +13,18 @@
   let container: HTMLDivElement;
 
   onMount(() => {
+    // Register PMTiles protocol for vector tile sources
+    const protocol = new Protocol();
+    maplibregl.addProtocol('pmtiles', protocol.tile);
+
     console.log('MapView mounting, container:', container);
-    const map = new maplibregl.Map({ 
-      container, 
-      style, 
-      center, 
-      zoom 
+    const map = new maplibregl.Map({
+      container,
+      style,
+      center,
+      zoom
     });
-    
+
     map.on('load', () => {
       console.log('MapLibre map loaded successfully');
       window.map = map;
@@ -32,12 +37,15 @@
         }
       });
     });
-    
+
     map.on('error', (e) => {
       console.error('MapLibre error:', e);
     });
-    
-    return () => map.remove();
+
+    return () => {
+      maplibregl.removeProtocol('pmtiles');
+      map.remove();
+    };
   });
 
 
