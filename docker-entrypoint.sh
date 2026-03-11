@@ -13,8 +13,8 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
     su postgres -c "/usr/lib/postgresql/17/bin/initdb -D $PGDATA"
     
     # Start PostgreSQL temporarily to run init scripts
-    su postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA -o '-c listen_addresses=localhost' -w start"
-    
+    su postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA -o '-c listen_addresses=localhost -c wal_level=logical' -w start"
+
     # Create database and user (ignore if exists)
     su postgres -c "psql --command \"CREATE USER $POSTGRES_USER WITH SUPERUSER PASSWORD '$POSTGRES_PASSWORD';\"" || true
     su postgres -c "createdb -O $POSTGRES_USER $POSTGRES_DB" || true
@@ -34,7 +34,7 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
 else
     # Database already exists — run any new migrations
     echo "Running migrations on existing database..."
-    su postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA -o '-c listen_addresses=localhost' -w start"
+    su postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA -o '-c listen_addresses=localhost -c wal_level=logical' -w start"
     for f in /docker-entrypoint-initdb.d/*.sql; do
         if [ -f "$f" ]; then
             echo "Running $f..."
