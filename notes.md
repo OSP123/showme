@@ -408,3 +408,20 @@ Follow-ups:
 - Rebuild Docker container to test PWA + offline tiles on localhost:3013
 - Manual test: navigate to area → "Save Area Offline" → download → go offline → zoom → tiles render
 - Deploy to production
+
+---
+
+Date: 2026-03-10
+
+Tasks:
+- Added geolocation-based map centering: map starts at user's location if permitted
+  - Created `geolocation.ts` utility with `getUserLocation()` using Geolocation API
+  - Adapts zoom level based on accuracy: 13 (high/<100m), 12 (medium), 11 (low/>1000m)
+  - Falls back to world view (0,0 zoom 2) if denied/unavailable
+  - Integrated into MapView.svelte: after map loads, requests location and flies to it
+  - 7 unit tests covering success, denial, timeout, and accuracy-based zoom
+- Restored missing `encryption.ts` (deleted in earlier commit but still imported by merged encryption code)
+- All 281 tests passing, build succeeds
+
+Follow-ups:
+- Push changes and update PR

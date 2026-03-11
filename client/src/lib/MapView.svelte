@@ -2,6 +2,7 @@
   import { onMount, createEventDispatcher } from 'svelte';
   import maplibregl, { type Map as GLMap } from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
+  import { getUserLocation } from './geolocation';
 
   export let style: any;
   export let center: [number, number] = [0, 0];
@@ -23,6 +24,13 @@
       console.log('MapLibre map loaded successfully');
       window.map = map;
       dispatch('load', { map });
+
+      // Try to center on user's location
+      getUserLocation().then((loc) => {
+        if (loc) {
+          map.flyTo({ center: loc.center, zoom: loc.zoom, duration: 1500 });
+        }
+      });
     });
     
     map.on('error', (e) => {
