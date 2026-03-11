@@ -31,6 +31,17 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
     su postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA -m fast -w stop"
     
     echo "PostgreSQL initialization complete!"
+else
+    # Database already exists — run any new migrations
+    echo "Running migrations on existing database..."
+    su postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA -o '-c listen_addresses=localhost' -w start"
+    for f in /docker-entrypoint-initdb.d/*.sql; do
+        if [ -f "$f" ]; then
+            echo "Running $f..."
+            su postgres -c "psql -d $POSTGRES_DB -f $f" || true
+        fi
+    done
+    su postgres -c "/usr/lib/postgresql/17/bin/pg_ctl -D $PGDATA -m fast -w stop"
 fi
 
 # Start supervisord
