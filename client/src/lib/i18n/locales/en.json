@@ -164,6 +164,7 @@
   "share.accessCode": "Access Code",
   "share.accessCodeHint": "Share this code verbally for quick access",
   "share.copyCode": "Copy Code",
+  "search.placeholder": "Search for a location...",
   "offline.saveArea": "Save Area Offline",
   "offline.cachedTiles": "Cached tiles",
   "offline.zoomRange": "Zoom range",

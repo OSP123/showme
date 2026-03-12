@@ -23,6 +23,7 @@
   import AccessCodeModal from '$lib/AccessCodeModal.svelte';
   import { isMapEncrypted, unlockMap } from '$lib/db/keyManager';
   import SaveAreaOffline from '$lib/SaveAreaOffline.svelte';
+  import LocationSearch from '$lib/LocationSearch.svelte';
 
   // Synchronous initialization to prevent flash
   const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -101,8 +102,8 @@
   // Protomaps vector style with multilingual labels
   import { layers as pmLayers, namedFlavor } from '@protomaps/basemaps';
 
-  // Use local proxy in production to avoid CORS issues with build.protomaps.com
-  const PMTILES_URL = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+  // Always use the nginx proxy to avoid CORS issues with build.protomaps.com
+  const PMTILES_URL = typeof window !== 'undefined'
     ? `pmtiles://${window.location.origin}/pmtiles/20260311.pmtiles`
     : 'pmtiles://https://build.protomaps.com/20260311.pmtiles';
 
@@ -546,6 +547,16 @@
 
   /* --- Desktop / Default Styles --- */
 
+  /* Search Bar */
+  .search-bar-container {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    width: 360px;
+  }
+
   /* Map Controls Container (Desktop: Top-Left Vertical Stack) */
   .map-controls {
     position: absolute;
@@ -791,6 +802,12 @@
       display: block;
     }
 
+    .search-bar-container {
+      width: calc(100vw - 80px);
+      left: 50%;
+      top: 12px;
+    }
+
     /* Hide default controls, show drawer styles when open */
     .map-controls {
       display: none;
@@ -882,6 +899,14 @@
     <div class="map-container">
       <SyncStatus {db} />
       
+      <div class="search-bar-container">
+        <LocationSearch on:select={(e) => {
+          if (mapInstance) {
+            mapInstance.flyTo({ center: [e.detail.lng, e.detail.lat], zoom: e.detail.zoom, duration: 1500 });
+          }
+        }} />
+      </div>
+
       <div class="mobile-header">
         <button class="hamburger-btn" on:click={() => toggleModal('menu')}>
           ☰

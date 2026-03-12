@@ -115,6 +115,7 @@
   "createMap.privateHint": "",
   "createMap.or": "",
   "createMap.joinPrivate": "",
+  "search.placeholder": "ቦታ ድለይ...",
   "offline.saveArea": "Save Area Offline",
   "offline.cachedTiles": "Cached tiles",
   "offline.zoomRange": "Zoom range",

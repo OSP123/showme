@@ -115,6 +115,7 @@
   "confirm.title": "تأكيد",
   "confirm.deletePhoto": "حذف هذه الصورة؟",
   "language.selector": "اللغة",
+  "search.placeholder": "ابحث عن موقع...",
   "offline.saveArea": "حفظ المنطقة للعمل بدون اتصال",
   "offline.cachedTiles": "المربعات المخزنة",
   "offline.zoomRange": "نطاق التكبير",
