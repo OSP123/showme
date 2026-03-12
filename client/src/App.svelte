@@ -802,13 +802,13 @@
       display: block;
     }
 
-    /* Push search bar to the right of the hamburger */
+    /* Drop search bar below the hamburger / sync row */
     .search-bar-container {
-      width: calc(100vw - 90px);
-      left: auto;
-      inset-inline-start: 70px;
+      width: calc(100vw - 32px);
+      left: 16px;
+      inset-inline-start: auto;
       transform: none;
-      top: 16px;
+      top: 70px;
     }
 
     /* Hide default controls, show drawer styles when open */
@@ -891,11 +891,11 @@
     }
   }
 
-  /* Extra-small screens: tighten search bar */
+  /* Extra-small screens: same positioning, just ensure full width */
   @media (max-width: 480px) {
     .search-bar-container {
-      width: calc(100vw - 80px);
-      inset-inline-start: 64px;
+      width: calc(100vw - 24px);
+      left: 12px;
     }
   }
 </style>
