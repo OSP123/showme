@@ -216,7 +216,7 @@
     background: #f0f7ff;
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 768px) {
     .search-container {
       max-width: none;
     }

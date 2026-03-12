@@ -555,6 +555,7 @@
     transform: translateX(-50%);
     z-index: 100;
     width: 360px;
+    max-width: calc(100vw - 32px);
   }
 
   /* Map Controls Container (Desktop: Top-Left Vertical Stack) */
@@ -805,9 +806,8 @@
     /* Drop search bar below the hamburger / sync row */
     .search-bar-container {
       width: calc(100vw - 32px);
-      left: 16px;
-      inset-inline-start: auto;
-      transform: none;
+      left: 50%;
+      transform: translateX(-50%);
       top: 70px;
     }
 
@@ -895,7 +895,6 @@
   @media (max-width: 480px) {
     .search-bar-container {
       width: calc(100vw - 24px);
-      left: 12px;
     }
   }
 </style>
