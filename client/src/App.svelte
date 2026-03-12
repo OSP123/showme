@@ -525,7 +525,7 @@
     min-height: 500px; /* Ensure minimum height */
   }
 
-  @media (max-width: 480px) {
+  @media (max-width: 768px) {
     .map-container {
       min-height: 100vh;
       min-height: -webkit-fill-available; /* iOS Safari fix */
@@ -790,8 +790,8 @@
     100% { transform: rotate(360deg); }
   }
 
-  /* --- Mobile Overrides (Max-Width 480px) --- */
-  @media (max-width: 480px) {
+  /* --- Mobile / Tablet Overrides (Max-Width 768px) --- */
+  @media (max-width: 768px) {
     .map-container {
       min-height: 100vh;
       min-height: -webkit-fill-available;
@@ -802,10 +802,13 @@
       display: block;
     }
 
+    /* Push search bar to the right of the hamburger */
     .search-bar-container {
-      width: calc(100vw - 80px);
-      left: 50%;
-      top: 12px;
+      width: calc(100vw - 90px);
+      left: auto;
+      inset-inline-start: 70px;
+      transform: none;
+      top: 16px;
     }
 
     /* Hide default controls, show drawer styles when open */
@@ -877,16 +880,23 @@
     /* Panel Adjustments for Mobile */
     .filter-panel, .share-panel-modal, .notification-panel-modal {
       width: 90%;
-      max-width: 350px; /* Keep strict max-width on mobile */
-      padding-top: 40px; /* Space for close X */
+      max-width: 350px;
+      padding-top: 40px;
       top: 50%;
       left: 50%;
-      right: auto; /* Clear any conflicting right props */
-      transform: translate(-50%, -50%); /* Ensure centering */
+      right: auto;
+      transform: translate(-50%, -50%);
       margin: 0;
       position: fixed;
     }
+  }
 
+  /* Extra-small screens: tighten search bar */
+  @media (max-width: 480px) {
+    .search-bar-container {
+      width: calc(100vw - 80px);
+      inset-inline-start: 64px;
+    }
   }
 </style>
 
