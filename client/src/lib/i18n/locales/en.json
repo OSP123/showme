@@ -23,6 +23,7 @@
   "pinType.other": "Other",
   "pinType.location": "Location",
   "createMap.title": "Create a Map",
+  "createMap.subtitle": "Give your map a name to get started. You can share it with others later.",
   "createMap.mapName": "Map Name",
   "createMap.enterName": "Enter map name",
   "createMap.makePrivate": "Make this map private (requires access code)",

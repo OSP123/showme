@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { _ } from 'svelte-i18n';
+  import { _, locale } from 'svelte-i18n';
+  import { SUPPORTED_LOCALES } from './i18n/index';
   export let disabled = false;
   let name = '';
   let isPrivate = false;
@@ -25,7 +26,19 @@
 </script>
 
 <div class="controls">
+  <div class="top-bar">
+    <div class="language-selector">
+      <span class="globe">🌐</span>
+      <select bind:value={$locale}>
+        {#each SUPPORTED_LOCALES as loc}
+          <option value={loc.code}>{loc.name}</option>
+        {/each}
+      </select>
+    </div>
+  </div>
+
   <h2>{$_('createMap.title')}</h2>
+  <p class="subtitle">{$_('createMap.subtitle')}</p>
 
   <div class="map-details">
     <div class="input-group">
@@ -122,11 +135,43 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   }
 
+  .top-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+  }
+
+  .language-selector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .language-selector .globe {
+    font-size: 18px;
+  }
+
+  .language-selector select {
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
+  }
+
   h2 {
-    margin: 0 0 24px 0;
+    margin: 0 0 8px 0;
     font-size: 24px;
     font-weight: 600;
     color: #333;
+  }
+
+  .subtitle {
+    margin: 0 0 24px 0;
+    font-size: 14px;
+    color: #888;
+    line-height: 1.4;
   }
 
   .map-details {

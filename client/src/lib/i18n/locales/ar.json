@@ -23,6 +23,7 @@
   "pinType.other": "أخرى",
   "pinType.location": "موقع",
   "createMap.title": "إنشاء خريطة",
+  "createMap.subtitle": "أعطِ خريطتك اسمًا للبدء. يمكنك مشاركتها مع الآخرين لاحقًا.",
   "createMap.mapName": "اسم الخريطة",
   "createMap.enterName": "أدخل اسم الخريطة",
   "createMap.makePrivate": "جعل هذه الخريطة خاصة (يتطلب رمز وصول)",
