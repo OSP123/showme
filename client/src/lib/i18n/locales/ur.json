@@ -129,5 +129,7 @@
   "offline.tilesFailed": "Tiles failed",
   "offline.downloadMore": "Download More",
   "install.addToDevice": "ایپ انسٹال کریں",
+  "install.iosSteps": "انسٹال کرنے کے لیے: شیئر بٹن دبائیں، پھر «ہوم اسکرین میں شامل کریں»",
+  "install.genericSteps": "انسٹال کرنے کے لیے: براؤزر مینو کھولیں اور «انسٹال» یا «ہوم اسکرین میں شامل کریں» منتخب کریں",
   "install.hint": "ShowMe کو اپنے آلے پر آف لائن ایپ کے طور پر استعمال کریں"
 }

@@ -129,5 +129,7 @@
   "offline.tilesFailed": "Tiles failed",
   "offline.downloadMore": "Download More",
   "install.addToDevice": "نصب برنامه",
+  "install.iosSteps": "برای نصب: دکمه اشتراک‌گذاری را بزنید، سپس «افزودن به صفحه اصلی»",
+  "install.genericSteps": "برای نصب: منوی مرورگر را باز کنید و «نصب» یا «افزودن به صفحه اصلی» را انتخاب کنید",
   "install.hint": "از ShowMe به صورت آفلاین به عنوان برنامه روی دستگاه خود استفاده کنید"
 }

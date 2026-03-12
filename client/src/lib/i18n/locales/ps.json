@@ -129,5 +129,7 @@
   "offline.tilesFailed": "Tiles failed",
   "offline.downloadMore": "Download More",
   "install.addToDevice": "اپلیکیشن نصب کړئ",
+  "install.iosSteps": "د نصبولو لپاره: د شریکولو تڼۍ کېکاږئ، بیا «کور سکرین ته اضافه کړئ»",
+  "install.genericSteps": "د نصبولو لپاره: د براوزر مینو پرانیزئ او «نصب» یا «کور سکرین ته اضافه کړئ» غوره کړئ",
   "install.hint": "ShowMe په خپل وسیله کې د آفلاین اپلیکیشن په توګه وکاروئ"
 }

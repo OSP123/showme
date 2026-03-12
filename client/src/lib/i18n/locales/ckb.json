@@ -129,5 +129,7 @@
   "offline.tilesFailed": "Tiles failed",
   "offline.downloadMore": "Download More",
   "install.addToDevice": "دامەزراندنی ئەپ",
+  "install.iosSteps": "بۆ دامەزراندن: دوگمەی هاوبەشکردن بکە، پاشان «زیادکردن بۆ شاشەی سەرەکی»",
+  "install.genericSteps": "بۆ دامەزراندن: لیستەی وێبگەڕ بکەرەوە و «دامەزراندن» یان «زیادکردن بۆ شاشەی سەرەکی» هەڵبژێرە",
   "install.hint": "ShowMe بەکاربهێنە وەک ئەپێکی سەرەکی لەسەر ئامێرەکەت بەبێ ئینتەرنێت"
 }

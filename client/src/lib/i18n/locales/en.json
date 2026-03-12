@@ -178,5 +178,7 @@
   "offline.tilesFailed": "Tiles failed",
   "offline.downloadMore": "Download More",
   "install.addToDevice": "Install App",
+  "install.iosSteps": "To install: tap the Share button, then \"Add to Home Screen\"",
+  "install.genericSteps": "To install: open your browser menu and select \"Install\" or \"Add to Home Screen\"",
   "install.hint": "Use ShowMe offline as a native app on your device"
 }

@@ -129,5 +129,7 @@
   "offline.tilesFailed": "Tiles failed",
   "offline.downloadMore": "Download More",
   "install.addToDevice": "Встановити додаток",
+  "install.iosSteps": "Щоб встановити: натисніть кнопку «Поділитися», потім «На початковий екран»",
+  "install.genericSteps": "Щоб встановити: відкрийте меню браузера і оберіть «Встановити» або «На початковий екран»",
   "install.hint": "Використовуйте ShowMe офлайн як додаток на вашому пристрої"
 }

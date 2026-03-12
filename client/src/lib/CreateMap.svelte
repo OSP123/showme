@@ -18,6 +18,7 @@
   // PWA install prompt
   let installPrompt: any = null;
   let isInstalled = false;
+  let platform: 'ios' | 'android' | 'desktop' = 'desktop';
 
   function handleBeforeInstall(e: Event) {
     e.preventDefault();
@@ -35,8 +36,17 @@
   }
 
   onMount(() => {
+    // Detect platform
+    const ua = navigator.userAgent;
+    if (/iPad|iPhone|iPod/.test(ua)) {
+      platform = 'ios';
+    } else if (/Android/.test(ua)) {
+      platform = 'android';
+    }
+
     // Check if already installed (standalone mode)
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    if (window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone === true) {
       isInstalled = true;
     }
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
@@ -159,12 +169,24 @@
     {$_('createMap.joinPrivate')}
   </button>
 
-  {#if installPrompt && !isInstalled}
+  {#if !isInstalled}
     <div class="install-banner">
-      <button class="install-btn" on:click={installApp}>
-        <span class="install-icon">📲</span>
-        {$_('install.addToDevice')}
-      </button>
+      {#if installPrompt}
+        <button class="install-btn" on:click={installApp}>
+          <span class="install-icon">📲</span>
+          {$_('install.addToDevice')}
+        </button>
+      {:else if platform === 'ios'}
+        <p class="install-steps">
+          <span class="install-icon">📲</span>
+          {$_('install.iosSteps')}
+        </p>
+      {:else}
+        <p class="install-steps">
+          <span class="install-icon">📲</span>
+          {$_('install.genericSteps')}
+        </p>
+      {/if}
       <p class="install-hint">{$_('install.hint')}</p>
     </div>
   {/if}
@@ -383,6 +405,16 @@
 
   .install-icon {
     font-size: 18px;
+  }
+
+  .install-steps {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 14px;
+    color: #555;
+    line-height: 1.5;
   }
 
   .install-hint {
