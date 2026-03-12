@@ -176,5 +176,7 @@
   "offline.complete": "Download complete!",
   "offline.tilesCached": "Tiles cached",
   "offline.tilesFailed": "Tiles failed",
-  "offline.downloadMore": "Download More"
+  "offline.downloadMore": "Download More",
+  "install.addToDevice": "Install App",
+  "install.hint": "Use ShowMe offline as a native app on your device"
 }

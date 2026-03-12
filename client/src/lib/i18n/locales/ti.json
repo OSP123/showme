@@ -127,5 +127,7 @@
   "offline.complete": "Download complete!",
   "offline.tilesCached": "Tiles cached",
   "offline.tilesFailed": "Tiles failed",
-  "offline.downloadMore": "Download More"
+  "offline.downloadMore": "Download More",
+  "install.addToDevice": "ኣፕ ጽዓን",
+  "install.hint": "ShowMe ብዘይ ኢንተርነት ኣብ መሳርሒኻ ተጠቐም"
 }

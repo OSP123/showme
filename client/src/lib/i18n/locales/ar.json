@@ -127,5 +127,7 @@
   "offline.complete": "اكتمل التحميل!",
   "offline.tilesCached": "المربعات المخزنة",
   "offline.tilesFailed": "المربعات الفاشلة",
-  "offline.downloadMore": "تحميل المزيد"
+  "offline.downloadMore": "تحميل المزيد",
+  "install.addToDevice": "تثبيت التطبيق",
+  "install.hint": "استخدم ShowMe بدون اتصال كتطبيق على جهازك"
 }

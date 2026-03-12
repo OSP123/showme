@@ -127,5 +127,7 @@
   "offline.complete": "Download complete!",
   "offline.tilesCached": "Tiles cached",
   "offline.tilesFailed": "Tiles failed",
-  "offline.downloadMore": "Download More"
+  "offline.downloadMore": "Download More",
+  "install.addToDevice": "Встановити додаток",
+  "install.hint": "Використовуйте ShowMe офлайн як додаток на вашому пристрої"
 }

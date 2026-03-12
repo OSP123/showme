@@ -127,5 +127,7 @@
   "offline.complete": "Download complete!",
   "offline.tilesCached": "Tiles cached",
   "offline.tilesFailed": "Tiles failed",
-  "offline.downloadMore": "Download More"
+  "offline.downloadMore": "Download More",
+  "install.addToDevice": "Installer l'appli",
+  "install.hint": "Utilisez ShowMe hors ligne comme application native"
 }

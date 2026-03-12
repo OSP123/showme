@@ -127,5 +127,7 @@
   "offline.complete": "Download complete!",
   "offline.tilesCached": "Tiles cached",
   "offline.tilesFailed": "Tiles failed",
-  "offline.downloadMore": "Download More"
+  "offline.downloadMore": "Download More",
+  "install.addToDevice": "اپلیکیشن نصب کړئ",
+  "install.hint": "ShowMe په خپل وسیله کې د آفلاین اپلیکیشن په توګه وکاروئ"
 }

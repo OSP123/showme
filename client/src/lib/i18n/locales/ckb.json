@@ -127,5 +127,7 @@
   "offline.complete": "Download complete!",
   "offline.tilesCached": "Tiles cached",
   "offline.tilesFailed": "Tiles failed",
-  "offline.downloadMore": "Download More"
+  "offline.downloadMore": "Download More",
+  "install.addToDevice": "دامەزراندنی ئەپ",
+  "install.hint": "ShowMe بەکاربهێنە وەک ئەپێکی سەرەکی لەسەر ئامێرەکەت بەبێ ئینتەرنێت"
 }

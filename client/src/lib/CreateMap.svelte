@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import { _, locale } from 'svelte-i18n';
   import { SUPPORTED_LOCALES } from './i18n/index';
   export let disabled = false;
@@ -14,6 +14,40 @@
   }>();
 
   $: passphraseValid = !enableEncryption || (passphrase.length >= 8 && passphrase === confirmPassphrase);
+
+  // PWA install prompt
+  let installPrompt: any = null;
+  let isInstalled = false;
+
+  function handleBeforeInstall(e: Event) {
+    e.preventDefault();
+    installPrompt = e;
+  }
+
+  async function installApp() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === 'accepted') {
+      isInstalled = true;
+    }
+    installPrompt = null;
+  }
+
+  onMount(() => {
+    // Check if already installed (standalone mode)
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      isInstalled = true;
+    }
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('appinstalled', () => { isInstalled = true; });
+  });
+
+  onDestroy(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    }
+  });
 
   function submit() {
     if (!name || !passphraseValid) return;
@@ -124,6 +158,16 @@
   >
     {$_('createMap.joinPrivate')}
   </button>
+
+  {#if installPrompt && !isInstalled}
+    <div class="install-banner">
+      <button class="install-btn" on:click={installApp}>
+        <span class="install-icon">📲</span>
+        {$_('install.addToDevice')}
+      </button>
+      <p class="install-hint">{$_('install.hint')}</p>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -309,6 +353,43 @@
   .join-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .install-banner {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+    text-align: center;
+  }
+
+  .install-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: #2d8a4e;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .install-btn:hover {
+    background: #236b3d;
+  }
+
+  .install-icon {
+    font-size: 18px;
+  }
+
+  .install-hint {
+    margin: 8px 0 0 0;
+    font-size: 12px;
+    color: #888;
+    line-height: 1.4;
   }
 
   /* Mobile optimizations */

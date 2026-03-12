@@ -127,5 +127,7 @@
   "offline.complete": "Download complete!",
   "offline.tilesCached": "Tiles cached",
   "offline.tilesFailed": "Tiles failed",
-  "offline.downloadMore": "Download More"
+  "offline.downloadMore": "Download More",
+  "install.addToDevice": "အက်ပ်ထည့်သွင်းရန်",
+  "install.hint": "ShowMe ကို သင့်စက်ပေါ်တွင် အော့ဖ်လိုင်းအက်ပ်အဖြစ် အသုံးပြုပါ"
 }
