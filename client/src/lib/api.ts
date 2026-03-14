@@ -29,6 +29,18 @@ function appendToken(url: string): string {
   return `${url}${separator}token=${encodeURIComponent(currentAccessToken)}`;
 }
 
+// Resolve a slug to a map ID. Returns { id, slug } or null if not found.
+export async function resolveMapSlug(slug: string): Promise<{ id: string; slug: string } | null> {
+  try {
+    const res = await fetch(`${API_URL}/api/maps/slug/${encodeURIComponent(slug)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return { id: data.id, slug: data.slug };
+  } catch {
+    return null;
+  }
+}
+
 // Look up a map by short access code
 export async function lookupAccessCode(code: string): Promise<{ id: string; name: string; is_private: boolean } | null> {
   try {

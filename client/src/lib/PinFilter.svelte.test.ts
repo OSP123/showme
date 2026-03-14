@@ -79,7 +79,7 @@ describe('PinFilter Component', () => {
       },
     });
 
-    expect(screen.getByText(/Showing: 3 types/)).toBeInTheDocument();
+    expect(screen.getByText(/Showing: 3 filters/)).toBeInTheDocument();
   });
 
   it('should show "All pins" when no filters are active', () => {

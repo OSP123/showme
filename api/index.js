@@ -26,6 +26,21 @@ function generateAccessCode() {
   return code;
 }
 
+// Generate a URL-safe slug from map name
+function generateSlug(name) {
+  const base = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 50);
+  // Append short random suffix to avoid collisions
+  const suffix = Math.random().toString(36).substring(2, 6);
+  return base ? `${base}-${suffix}` : suffix;
+}
+
 // Validate access to a map (returns { valid, map, status, reason })
 async function validateMapAccess(mapId, token) {
   const result = await pool.query('SELECT * FROM maps WHERE id = $1', [mapId]);
@@ -86,12 +101,14 @@ app.post('/api/maps', async (req, res) => {
     const mapId = id || uuidv4();
     const timestamp = created_at || new Date().toISOString();
     const accessCode = is_private ? generateAccessCode() : null;
+    const slug = generateSlug(name);
 
     const result = await pool.query(
-      `INSERT INTO maps (id, name, is_private, access_token, access_code, encryption_salt, fuzzing_enabled, fuzzing_radius, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO maps (id, name, slug, is_private, access_token, access_code, encryption_salt, fuzzing_enabled, fuzzing_radius, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name,
+         slug = COALESCE(maps.slug, EXCLUDED.slug),
          is_private = EXCLUDED.is_private,
          access_token = EXCLUDED.access_token,
          access_code = COALESCE(maps.access_code, EXCLUDED.access_code),
@@ -99,7 +116,7 @@ app.post('/api/maps', async (req, res) => {
          fuzzing_enabled = EXCLUDED.fuzzing_enabled,
          fuzzing_radius = EXCLUDED.fuzzing_radius
        RETURNING *`,
-      [mapId, name, is_private, access_token, accessCode, encryption_salt, fuzzing_enabled, fuzzing_radius, timestamp]
+      [mapId, name, slug, is_private, access_token, accessCode, encryption_salt, fuzzing_enabled, fuzzing_radius, timestamp]
     );
 
     console.log('Created map:', result.rows[0].id);
@@ -107,6 +124,26 @@ app.post('/api/maps', async (req, res) => {
   } catch (error) {
     console.error('Error creating map:', error);
     res.status(500).json({ error: 'Failed to create map' });
+  }
+});
+
+// Look up map by slug (returns map ID for redirect)
+app.get('/api/maps/slug/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const result = await pool.query(
+      'SELECT id, name, is_private, encryption_salt, slug FROM maps WHERE slug = $1',
+      [slug.toLowerCase()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No map found with that name' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error looking up slug:', error);
+    res.status(500).json({ error: 'Failed to look up map' });
   }
 });
 

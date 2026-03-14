@@ -1,6 +1,7 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
   export let mapId: string;
+  export let mapSlug: string | null = null;
   export let accessToken: string | null = null;
   export let accessCode: string | null = null;
   export let isPrivate: boolean = false;
@@ -11,7 +12,8 @@
   function getShareUrl() {
     if (typeof window === 'undefined') return '';
     const url = new URL(window.location.href);
-    url.searchParams.set('map', mapId);
+    // Use slug if available for friendlier URLs
+    url.searchParams.set('map', mapSlug || mapId);
     if (accessToken) {
       url.searchParams.set('token', accessToken);
     }

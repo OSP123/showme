@@ -12,9 +12,12 @@
   import Supercluster from 'supercluster';
   import { getThumbnailUrl } from '$lib/imageCache';
 
+  import { LngLatBounds } from 'maplibre-gl';
+
   export let map: GLMap;
   export let mapId: string;
   export let filterTypes: string[] = []; // Pin types to show (empty = show all)
+  export let filterTags: string[] = []; // Custom tags to filter by (empty = show all)
   
   // Set up global error handler for unhandled promise rejections from ElectricSQL
   onMount(() => {
@@ -73,6 +76,7 @@
   let clusterIndex: Supercluster | null = null;
   let useClustering = true; // Enable clustering by default
   let pendingRedraw = false; // Deferred redraw when popup is open during db-change
+  let hasFittedBounds = false; // Only auto-fit once per map load
 
   // Helper function to check if panic wipe is active (checks both window flag and localStorage)
   function isPanicWipeActive(): boolean {
@@ -105,16 +109,30 @@
     let filteredPins = pins;
     if (filterTypes.length > 0) {
       filteredPins = pins.filter((pin) => {
-        // Tags are now arrays (TEXT[]), not JSON strings
         const tags = Array.isArray(pin.tags) ? pin.tags : [];
         if (tags.length > 0) {
           const pinType = tags[0];
           return filterTypes.includes(pinType);
         }
-        // If no type or invalid, only show if 'other' is in filter
         return filterTypes.includes('other');
       });
     }
+
+    // Filter pins by custom tags if tag filter is active
+    if (filterTags.length > 0) {
+      filteredPins = filteredPins.filter((pin) => {
+        const tags = Array.isArray(pin.tags) ? pin.tags.slice(1) : []; // skip type tag
+        return filterTags.some(ft => tags.includes(ft));
+      });
+    }
+
+    // Collect all unique custom tags for the filter UI
+    const allTags = new Set<string>();
+    pins.forEach((pin) => {
+      const tags = Array.isArray(pin.tags) ? pin.tags.slice(1) : [];
+      tags.forEach(t => { if (t) allTags.add(t); });
+    });
+    window.dispatchEvent(new CustomEvent('pin-tags-updated', { detail: { tags: Array.from(allTags) } }));
     
     console.log(`🔍 Drawing pins for map ${mapId}: ${filteredPins.length} of ${pins.length} pins (filtered)`);
     
@@ -129,6 +147,22 @@
       drawClusteredPins(filteredPins);
     } else {
       drawIndividualPins(filteredPins);
+    }
+
+    // Auto-fit map bounds to pins on first load
+    if (!hasFittedBounds && filteredPins.length > 0) {
+      hasFittedBounds = true;
+      const bounds = new LngLatBounds();
+      filteredPins.forEach((pin) => {
+        const lat = typeof pin.lat === 'string' ? parseFloat(pin.lat) : pin.lat;
+        const lng = typeof pin.lng === 'string' ? parseFloat(pin.lng) : pin.lng;
+        if (!isNaN(lat) && !isNaN(lng)) {
+          bounds.extend([lng, lat]);
+        }
+      });
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 1500 });
+      }
     }
   }
 
@@ -399,13 +433,14 @@
       }
       
       currentMapId = mapId;
+      hasFittedBounds = false;
       setupSync();
     }
   }
 
-  // Reactive: redraw pins when filter changes
+  // Reactive: redraw pins when filter changes (type or tag)
   // NOTE: We redraw even if panic wipe is active - flag only prevents PostgREST polling
-  $: if (map && mapId && filterTypes) {
+  $: if (map && mapId && (filterTypes || filterTags)) {
     drawPins(true);
   }
 

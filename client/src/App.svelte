@@ -12,7 +12,7 @@
   import EncryptionSetup from '$lib/EncryptionSetup.svelte';
   import NotificationBell from '$lib/NotificationBell.svelte';
   import { initLocalDb }    from '$lib/db/pglite';
-  import { createMap, addPin, updatePin, getPins, getMap, syncPinsFromApi, setAccessToken, getAccessToken, enableMapEncryption } from '$lib/api';
+  import { createMap, addPin, updatePin, getPins, getMap, syncPinsFromApi, setAccessToken, getAccessToken, enableMapEncryption, resolveMapSlug } from '$lib/api';
   import type { Map as GLMap }  from 'maplibre-gl';
   import type { PinData, MapRow, PinType, PinRow } from '$lib/models';
   import { notifications, getPinTypeEmoji } from '$lib/notifications';
@@ -54,6 +54,8 @@
   let showQuickPin = false;
   let pinLocation: { lat: number; lng: number } | null = null;
   let selectedPinTypes: PinType[] = [];
+  let selectedTags: string[] = [];
+  let availableTags: string[] = [];
   
   // Modal State Management
   type ModalState = 'menu' | 'filter' | 'share' | 'notifications' | 'panic' | 'offline' | null;
@@ -160,11 +162,33 @@
 
   onMount(async () => {
     db = await initLocalDb();
-    
+
+    // Listen for tag updates from PinLayer
+    const tagHandler = (e: CustomEvent) => {
+      availableTags = e.detail.tags;
+    };
+    window.addEventListener('pin-tags-updated', tagHandler as EventListener);
+
+    // If mapId doesn't look like a UUID, try to resolve it as a slug
+    if (mapId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mapId)) {
+      const resolved = await resolveMapSlug(mapId);
+      if (resolved) {
+        mapId = resolved.id;
+        // Update URL to use the real map ID
+        const url = new URL(window.location.href);
+        url.searchParams.set('map', resolved.slug || resolved.id);
+        window.history.replaceState({}, '', url);
+      }
+    }
+
     // Check if there's a mapId already set (from synchronous check)
     if (mapId) {
       await loadMapData();
     }
+
+    return () => {
+      window.removeEventListener('pin-tags-updated', tagHandler as EventListener);
+    };
   });
 
   let isMapLoading = false;
@@ -1003,8 +1027,11 @@
           <button class="close-panel-btn" on:click={closeAllModals}>×</button>
           <PinFilter
             bind:selectedTypes={selectedPinTypes}
+            {availableTags}
+            bind:selectedTags={selectedTags}
             on:filterChange={(e) => {
               selectedPinTypes = e.detail.types;
+              if (e.detail.tags !== undefined) selectedTags = e.detail.tags;
             }}
           />
         </div>
@@ -1015,6 +1042,7 @@
           <button class="close-panel-btn" on:click={closeAllModals}>×</button>
           <ShareMap
             mapId={mapId}
+            mapSlug={mapData.slug}
             accessToken={mapData.access_token}
             accessCode={mapData.access_code}
             isPrivate={mapData.is_private === true || mapData.is_private === 'true'}
@@ -1058,6 +1086,7 @@
           map={mapInstance}
           mapId={mapId}
           filterTypes={selectedPinTypes}
+          filterTags={selectedTags}
         />
       {/if}
 
@@ -1083,6 +1112,7 @@
           mode={editMode ? 'edit' : 'create'}
           pinId={editPinId}
           initialData={editPinData}
+          existingTags={availableTags}
           on:create={handlePinCreate}
           on:update={handlePinUpdate}
           on:cancel={handlePinCancel}

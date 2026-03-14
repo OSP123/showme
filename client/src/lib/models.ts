@@ -4,6 +4,7 @@
 export interface MapRow {
   id: string;
   name: string;
+  slug: string | null;
   is_private: 'true' | 'false';
   access_token: string | null;
   access_code: string | null;

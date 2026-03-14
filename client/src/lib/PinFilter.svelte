@@ -5,9 +5,11 @@
   import { PIN_TYPE_DEFINITIONS } from './i18n/pinTypes';
 
   export let selectedTypes: PinType[] = [];
+  export let availableTags: string[] = [];
+  export let selectedTags: string[] = [];
 
   const dispatch = createEventDispatcher<{
-    filterChange: { types: PinType[] };
+    filterChange: { types: PinType[]; tags: string[] };
   }>();
 
   function toggleType(type: PinType) {
@@ -16,22 +18,32 @@
     } else {
       selectedTypes = [...selectedTypes, type];
     }
-    dispatch('filterChange', { types: selectedTypes });
+    dispatch('filterChange', { types: selectedTypes, tags: selectedTags });
+  }
+
+  function toggleTag(tag: string) {
+    if (selectedTags.includes(tag)) {
+      selectedTags = selectedTags.filter(t => t !== tag);
+    } else {
+      selectedTags = [...selectedTags, tag];
+    }
+    dispatch('filterChange', { types: selectedTypes, tags: selectedTags });
   }
 
   function clearFilters() {
     selectedTypes = [];
-    dispatch('filterChange', { types: [] });
+    selectedTags = [];
+    dispatch('filterChange', { types: [], tags: [] });
   }
 </script>
 
 <div class="pin-filter">
   <div class="filter-header">
-    {#if selectedTypes.length > 0}
+    {#if selectedTypes.length > 0 || selectedTags.length > 0}
       <button class="clear-btn" on:click={clearFilters}>{$_('filter.clear')}</button>
     {/if}
   </div>
-  
+
   <div class="filter-types">
     {#each PIN_TYPE_DEFINITIONS as type}
       <button
@@ -45,10 +57,28 @@
       </button>
     {/each}
   </div>
-  
-  {#if selectedTypes.length > 0}
+
+  {#if availableTags.length > 0}
+    <div class="tag-filter-section">
+      <div class="section-label">{$_('filter.tags')}</div>
+      <div class="tag-filter-list">
+        {#each availableTags as tag}
+          <button
+            type="button"
+            class="tag-filter-btn"
+            class:active={selectedTags.includes(tag)}
+            on:click={() => toggleTag(tag)}
+          >
+            {tag}
+          </button>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
+  {#if selectedTypes.length > 0 || selectedTags.length > 0}
     <div class="active-filters">
-      {$_('filter.showingCount', { values: { count: selectedTypes.length } })}
+      {$_('filter.showingCount', { values: { count: selectedTypes.length + selectedTags.length } })}
     </div>
   {:else}
     <div class="active-filters">
@@ -127,8 +157,8 @@
     transition: all 0.2s;
     text-align: start;
     width: 100%;
-    touch-action: manipulation; /* Prevent double-tap zoom */
-    min-height: 44px; /* Minimum touch target size */
+    touch-action: manipulation;
+    min-height: 44px;
   }
 
   .filter-type-btn:hover {
@@ -150,6 +180,50 @@
     font-size: 14px;
   }
 
+  .tag-filter-section {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .section-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+
+  .tag-filter-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tag-filter-btn {
+    padding: 4px 12px;
+    border: 1px solid #ddd;
+    border-radius: 16px;
+    background: white;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+    color: #555;
+  }
+
+  .tag-filter-btn:hover {
+    border-color: #4a90e2;
+    background: #f0f7ff;
+  }
+
+  .tag-filter-btn.active {
+    border-color: #1976d2;
+    background: #e3f2fd;
+    color: #1976d2;
+    font-weight: 500;
+  }
+
   .active-filters {
     margin-top: 12px;
     padding-top: 12px;
@@ -158,4 +232,3 @@
     color: #666;
   }
 </style>
-

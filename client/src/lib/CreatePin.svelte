@@ -14,6 +14,7 @@
   export let mode: 'create' | 'edit' = 'create';
   export let pinId: string | null = null;
   export let initialData: Partial<PinData> | null = null;
+  export let existingTags: string[] = [];
 
   const dispatch = createEventDispatcher<{
     create: PinData;
@@ -28,6 +29,20 @@
   let tagInput = '';
   let photoUrls: string[] = [];
   let uploadError = '';
+  let showSuggestions = false;
+
+  $: tagSuggestions = existingTags.filter(t =>
+    !tags.includes(t) &&
+    t.toLowerCase().includes(tagInput.toLowerCase().trim())
+  ).slice(0, 5);
+
+  function selectSuggestion(tag: string) {
+    if (!tags.includes(tag)) {
+      tags = [...tags, tag];
+    }
+    tagInput = '';
+    showSuggestions = false;
+  }
 
   // Pre-populate form in edit mode
   onMount(() => {
@@ -166,18 +181,44 @@
 
       <div class="form-group">
         <label for="tags">{$_('createPin.tags')}</label>
-        <div class="tag-input-group">
-          <input
-            id="tags"
-            type="text"
-            bind:value={tagInput}
-            on:keydown={handleKeydown}
-            placeholder={$_('createPin.tagPlaceholder')}
-          />
-          <button type="button" on:click={addTag} disabled={!tagInput.trim()}>
-            {$_('createPin.addTag')}
-          </button>
+        <div class="tag-input-wrapper">
+          <div class="tag-input-group">
+            <input
+              id="tags"
+              type="text"
+              bind:value={tagInput}
+              on:keydown={handleKeydown}
+              on:input={() => { showSuggestions = tagInput.trim().length > 0; }}
+              on:focus={() => { if (tagInput.trim().length > 0) showSuggestions = true; }}
+              on:blur={() => { setTimeout(() => { showSuggestions = false; }, 150); }}
+              placeholder={$_('createPin.tagPlaceholder')}
+              autocomplete="off"
+            />
+            <button type="button" on:click={addTag} disabled={!tagInput.trim()}>
+              {$_('createPin.addTag')}
+            </button>
+          </div>
+          {#if showSuggestions && tagSuggestions.length > 0}
+            <ul class="tag-suggestions">
+              {#each tagSuggestions as suggestion}
+                <li>
+                  <button type="button" on:mousedown|preventDefault={() => selectSuggestion(suggestion)}>
+                    {suggestion}
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
         </div>
+        {#if existingTags.length > 0 && tags.length === 0 && !tagInput}
+          <div class="existing-tags-hint">
+            {#each existingTags.slice(0, 8) as tag}
+              <button type="button" class="tag-hint" on:click={() => selectSuggestion(tag)}>
+                + {tag}
+              </button>
+            {/each}
+          </div>
+        {/if}
         {#if tags.length > 0}
           <div class="tags-list">
             {#each tags as tag}
@@ -513,5 +554,66 @@
 
   .photo-remove:hover {
     background: rgba(0, 0, 0, 0.8);
+  }
+
+  .tag-input-wrapper {
+    position: relative;
+  }
+
+  .tag-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    z-index: 10;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .tag-suggestions li button {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    text-align: start;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+  }
+
+  .tag-suggestions li button:hover {
+    background: #f0f7ff;
+    color: #4a90e2;
+  }
+
+  .existing-tags-hint {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .tag-hint {
+    padding: 4px 10px;
+    border: 1px dashed #ccc;
+    border-radius: 12px;
+    background: #fafafa;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .tag-hint:hover {
+    border-color: #4a90e2;
+    color: #4a90e2;
+    background: #f0f7ff;
   }
 </style>
