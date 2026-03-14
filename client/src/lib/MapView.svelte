@@ -22,7 +22,9 @@
       container,
       style,
       center,
-      zoom
+      zoom,
+      fadeDuration: 0,
+      maxTileCacheSize: 150,
     });
 
     map.on('load', () => {

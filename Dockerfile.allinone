@@ -66,6 +66,9 @@ COPY migrations/*.sql /docker-entrypoint-initdb.d/
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY nginx.conf /etc/nginx/sites-available/default
 
+# Create nginx cache directory for PMTiles
+RUN mkdir -p /var/cache/nginx/pmtiles
+
 # Environment variables
 ENV POSTGRES_USER=postgres \
     POSTGRES_PASSWORD=showme_password \
