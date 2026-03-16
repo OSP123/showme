@@ -934,13 +934,12 @@
 </style>
 
 <main>
-  {#if mapLoading}
+  {#if !db || mapLoading}
     <div class="loading-overlay">
       <div class="loading-spinner"></div>
       <p class="loading-text">{$_('loading.map')}</p>
     </div>
-  {/if}
-  {#if !mapId && !mapLoading}
+  {:else if !mapId}
     <div class="create-map-container">
       <CreateMap disabled={!db} on:create={handleCreate} on:joinPrivate={() => { showAccessCodeModal = true; }} />
     </div>
