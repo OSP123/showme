@@ -101,56 +101,28 @@
   }
   let showMobileMenu = false;
 
-  // Protomaps vector style with multilingual labels
-  import { layers as pmLayers, namedFlavor } from '@protomaps/basemaps';
-
-  // Always use the nginx proxy to avoid CORS issues with build.protomaps.com
-  const PMTILES_URL = typeof window !== 'undefined'
-    ? `pmtiles://${window.location.origin}/pmtiles/20260311.pmtiles`
-    : 'pmtiles://https://build.protomaps.com/20260311.pmtiles';
-
-  function buildMapStyle(lang: string) {
-    return {
-      version: 8 as const,
-      glyphs: 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf',
-      sprite: 'https://protomaps.github.io/basemaps-assets/sprites/v4/light',
-      sources: {
-        protomaps: {
-          type: 'vector' as const,
-          url: PMTILES_URL,
-          attribution:
-            '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org" target="_blank" rel="noopener">OSM contributors</a>'
-        }
-      },
-      layers: pmLayers('protomaps', namedFlavor('light'), { lang })
-    };
-  }
-
-  $: mapStyle = buildMapStyle($locale || 'en');
-
-  // Update map labels when locale changes (without full style reload)
-  $: if (mapInstance && $locale) {
-    updateMapLanguage(mapInstance, $locale);
-  }
-
-  function updateMapLanguage(map: GLMap, lang: string) {
-    if (!map.isStyleLoaded()) {
-      map.once('styledata', () => updateMapLanguage(map, lang));
-      return;
-    }
-    const style = map.getStyle();
-    if (style?.layers) {
-      for (const layer of style.layers) {
-        if (layer.type === 'symbol' && layer.layout?.['text-field']) {
-          map.setLayoutProperty(layer.id, 'text-field', [
-            'coalesce',
-            ['get', `name:${lang}`],
-            ['get', 'name']
-          ]);
-        }
+  // OSM raster tiles — loaded directly from CDN edge servers for speed
+  const mapStyle = {
+    version: 8 as const,
+    sources: {
+      osm: {
+        type: 'raster' as const,
+        tiles: [
+          'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+        ],
+        tileSize: 256,
+        minzoom: 0,
+        maxzoom: 19,
+        attribution:
+          '© <a href="https://openstreetmap.org" target="_blank" rel="noopener">OSM contributors</a>'
       }
-    }
-  }
+    },
+    layers: [
+      { id: 'osm', type: 'raster' as const, source: 'osm' }
+    ]
+  };
 
   // Debug logging
   $: {

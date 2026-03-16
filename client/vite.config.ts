@@ -22,20 +22,11 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 20 * 1024 * 1024, // 20MB for PGlite WASM
         runtimeCaching: [
           {
-            urlPattern: /\/pmtiles\/.*|^https:\/\/build\.protomaps\.com\/.*/,
+            urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\/.*/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'pmtiles',
+              cacheName: 'map-tiles',
               expiration: { maxEntries: 2000, maxAgeSeconds: 30 * 24 * 60 * 60 },
-              cacheableResponse: { statuses: [0, 200, 206] }
-            }
-          },
-          {
-            urlPattern: /^https:\/\/protomaps\.github\.io\/basemaps-assets\/.*/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'protomaps-assets',
-              expiration: { maxEntries: 500, maxAgeSeconds: 30 * 24 * 60 * 60 },
               cacheableResponse: { statuses: [0, 200] }
             }
           },
