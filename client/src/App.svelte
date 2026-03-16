@@ -934,17 +934,17 @@
 </style>
 
 <main>
-  {#if !mapId}
+  {#if mapLoading}
+    <div class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">{$_('loading.map')}</p>
+    </div>
+  {/if}
+  {#if !mapId && !mapLoading}
     <div class="create-map-container">
       <CreateMap disabled={!db} on:create={handleCreate} on:joinPrivate={() => { showAccessCodeModal = true; }} />
     </div>
-  {:else}
-    {#if mapLoading}
-      <div class="loading-overlay">
-        <div class="loading-spinner"></div>
-        <p class="loading-text">{$_('loading.map')}</p>
-      </div>
-    {/if}
+  {:else if mapId}
     <div class="map-container">
       <SyncStatus {db} />
       
