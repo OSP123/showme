@@ -939,11 +939,13 @@
       <div class="loading-spinner"></div>
       <p class="loading-text">{$_('loading.map')}</p>
     </div>
-  {:else if !mapId}
+  {/if}
+  {#if db && !mapId && !mapLoading}
     <div class="create-map-container">
       <CreateMap disabled={!db} on:create={handleCreate} on:joinPrivate={() => { showAccessCodeModal = true; }} />
     </div>
-  {:else if mapId}
+  {/if}
+  {#if mapId}
     <div class="map-container">
       <SyncStatus {db} />
       
