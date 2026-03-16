@@ -316,6 +316,18 @@
       console.log('Map created:', result);
       mapId = result.id;
 
+      // Use the API response directly as mapData — no need to wait for Electric sync
+      mapData = {
+        id: result.id,
+        name,
+        is_private: isPrivate ? 'true' : 'false',
+        slug: result.slug || null,
+        access_token: result.access_token || null,
+        access_code: result.access_code || null,
+        encryption_salt: null,
+        created_at: new Date().toISOString(),
+      };
+
       // Set access token for private maps so the creator can access their own map
       if (isPrivate && result.access_token) {
         setAccessToken(result.access_token);
@@ -324,12 +336,13 @@
 
       // Update URL to include the map ID
       const url = new URL(window.location.href);
-      url.searchParams.set('map', result.id);
+      url.searchParams.set('map', result.slug || result.id);
       window.history.pushState({}, '', url);
 
-      await loadMapData();
+      // Don't await loadMapData — mapData is already set, let sync happen in background
     } catch (error) {
       console.error('Failed to create map:', error);
+      mapLoading = false;
     }
   }
 
