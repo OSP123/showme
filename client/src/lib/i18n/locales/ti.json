@@ -132,5 +132,6 @@
   "install.addToDevice": "ኣፕ ጽዓን",
   "install.iosSteps": "ንምጽዓን: ናይ ምክፋል መልጎም ጠውቕ፣ ድሕሪኡ «ኣብ ገጽ ምእታው ወስኽ»",
   "install.genericSteps": "ንምጽዓን: ናይ ብራውዘር ዝርዝር ክፈት፣ «ጽዓን» ወይ «ኣብ ገጽ ምእታው ወስኽ» ምረጽ",
-  "install.hint": "ShowMe ብዘይ ኢንተርነት ኣብ መሳርሒኻ ተጠቐም"
+  "install.hint": "ShowMe ብዘይ ኢንተርነት ኣብ መሳርሒኻ ተጠቐም",
+  "loading.map": "ካርታ ይጸዓን ኣሎ..."
 }

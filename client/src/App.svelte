@@ -65,6 +65,7 @@
   let editPinId: string | null = null;
   let editPinData: Partial<PinData> | null = null;
   let showNotifications = false; // Kept for binding compatibility, controlled via activeModal
+  let mapLoading = false;
   let showAlertModal = false;
   let alertMessage = '';
   let showAccessCodeModal = false;
@@ -155,6 +156,7 @@
 
     // Check if there's a mapId already set (from synchronous check)
     if (mapId) {
+      mapLoading = true;
       await loadMapData();
     }
 
@@ -307,6 +309,7 @@
 
   async function handleCreate(event: CustomEvent<{ name: string; isPrivate: boolean; passphrase?: string }>) {
     console.log('Creating map with:', event.detail);
+    mapLoading = true;
     try {
       const { name, isPrivate, passphrase } = event.detail;
       const result = await createMap(db, name, isPrivate, passphrase);
@@ -332,6 +335,7 @@
 
   function handleMapLoad(event: CustomEvent<{ map: GLMap }>) {
     console.log('Map loaded:', event.detail);
+    mapLoading = false;
     mapInstance = event.detail.map;
     mapInstance.on('click', (e) => {
       // Don't show pin menu if clicking on a marker/popup
@@ -893,6 +897,40 @@
       width: calc(100vw - 24px);
     }
   }
+
+  .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e0e0e0;
+    border-top-color: #4a90e2;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .loading-text {
+    margin-top: 16px;
+    font-size: 15px;
+    color: #666;
+    font-weight: 500;
+  }
 </style>
 
 <main>
@@ -901,6 +939,12 @@
       <CreateMap disabled={!db} on:create={handleCreate} on:joinPrivate={() => { showAccessCodeModal = true; }} />
     </div>
   {:else}
+    {#if mapLoading}
+      <div class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">{$_('loading.map')}</p>
+      </div>
+    {/if}
     <div class="map-container">
       <SyncStatus {db} />
       

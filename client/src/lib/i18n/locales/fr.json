@@ -132,5 +132,6 @@
   "install.addToDevice": "Installer l'appli",
   "install.iosSteps": "Pour installer : appuyez sur Partager, puis « Sur l'écran d'accueil »",
   "install.genericSteps": "Pour installer : ouvrez le menu du navigateur et sélectionnez « Installer » ou « Ajouter à l'écran d'accueil »",
-  "install.hint": "Utilisez ShowMe hors ligne comme application native"
+  "install.hint": "Utilisez ShowMe hors ligne comme application native",
+  "loading.map": "Chargement de la carte..."
 }
